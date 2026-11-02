@@ -1,0 +1,9 @@
+name = "trackrush-data"
+main = "index.ts"
+compatibility_date = "2025-01-01"
+
+# Fill in database_id after running:  npx wrangler d1 create trackrush
+[[d1_databases]]
+binding = "DB"
+database_name = "trackrush"
+database_id = "PASTE-YOUR-DATABASE-ID-HERE"

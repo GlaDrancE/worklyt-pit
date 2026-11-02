@@ -1,0 +1,48 @@
+# dependencies and build output
+node_modules/
+dist/
+build/
+coverage/
+.vite/
+*.tsbuildinfo
+
+# secrets and local configuration: never commit these
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+secrets/
+credentials*.json
+service-account*.json
+.npmrc
+.netrc
+
+# logs, caches and OS / editor junk
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# test artefacts and local data
+playwright-report/
+test-results/
+screenshots/
+*.local
+
+# relay server local data (leaderboard file)
+server/data/
+
+# Cloudflare
+.wrangler/
+.dev.vars
+
+# nested duplicate copy
+/trackrush-pro/

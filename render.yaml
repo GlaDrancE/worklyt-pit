@@ -1,0 +1,8 @@
+# One-click free hosting for the relay on Render (https://render.com): New > Blueprint > pick this repo.
+# The game then connects to  wss://<your-service>.onrender.com
+services:
+  - type: web
+    name: trackrush-relay
+    runtime: docker
+    plan: free
+    healthCheckPath: /

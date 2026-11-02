@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="description" content="TrackRush Pro: an original 3D racing simulator with lap timing, minimap and telemetry export." />
+    <title>TrackRush Pro</title>
+  </head>
+  <body>
+    <div id="stage">
+    <canvas id="game"></canvas>
+
+    <div id="loading" class="overlay">
+      <div class="panel">
+        <h1>TRACKRUSH <span>PRO</span></h1>
+        <p id="loading-text">Starting…</p>
+      </div>
+    </div>
+
+    <div id="menu" class="overlay hidden">
+      <div class="panel menu-panel">
+        <div class="menu-head">
+          <h1>TRACKRUSH <span>PRO</span></h1>
+          <div class="tabs" role="tablist" aria-label="Game type">
+            <button type="button" role="tab" data-tab="battle" aria-selected="true">Battle</button>
+            <button type="button" role="tab" data-tab="solo" aria-selected="false">Solo drive</button>
+            <button type="button" role="tab" data-tab="online" aria-selected="false">1 vs 1</button>
+          </div>
+          <p id="tab-desc" class="sub"></p>
+        </div>
+        <div class="menu-body">
+          <label>Driver name
+            <input id="driver-name" type="text" maxlength="20" autocomplete="off" spellcheck="false" />
+          </label>
+          <p id="driver-id" class="sub"></p>
+
+          <h3 class="sec">Track</h3>
+          <label>Circuit <select id="track-select"></select></label>
+          <p id="track-desc" class="sub"></p>
+          <div id="rank-box">
+            <h2>Fastest on this track</h2>
+            <ol id="rank-list"></ol>
+          </div>
+
+          <h3 class="sec">Conditions</h3>
+          <label>Time of day
+            <select id="time-select">
+              <option value="track">Track default</option>
+              <option value="day">Day</option>
+              <option value="dusk">Dusk</option>
+              <option value="night">Night</option>
+            </select>
+          </label>
+          <label class="check"><input id="set-lamps" type="checkbox" /> Street lights on at dusk and night (turn off for a darker, harder race; press L in a race to switch)</label>
+          <label>Weather
+            <select id="weather-select">
+              <option value="track">Track default</option>
+              <option value="clear">Dry</option>
+              <option value="rain">Rain (less grip)</option>
+            </select>
+          </label>
+          <p class="sub" data-for="online">Online, both drivers race in the same time of day and weather. A stranger is matched with someone who picked the same.</p>
+
+          <h3 class="sec">Your car</h3>
+          <label>Car colour <select id="livery-select"></select></label>
+          <p id="livery-desc" class="sub"></p>
+          <label>Engine sound <select id="engine-select"></select></label>
+          <p id="engine-desc" class="sub"></p>
+          <label>Tyres
+            <select id="tyre-select">
+              <option value="off">Unlimited grip (no wear)</option>
+              <option value="soft">Soft: grippy, wears fast</option>
+              <option value="medium">Medium: balanced</option>
+              <option value="hard">Hard: lasts longest</option>
+            </select>
+          </label>
+          <p class="sub">With tyre wear on, stop inside the blue box on the right of the main straight (about 100 m after the line) for 3 seconds to fit a fresh set.</p>
+          <label data-for="battle solo">Handling
+            <select id="handling-select">
+              <option value="grip">Race (grip)</option>
+              <option value="drift">Drift (loose rear, counter-steer assist)</option>
+            </select>
+          </label>
+          <label data-for="battle solo">Damage
+            <select id="damage-select">
+              <option value="realistic">Realistic: crashes hurt, repair in the pit</option>
+              <option value="visual">Looks only (no performance loss)</option>
+              <option value="off">Off</option>
+            </select>
+          </label>
+          <p class="sub" data-for="battle solo">Crash into walls or rival cars and your car gets damaged. Heavy crashes bring out the yellow flag, the safety car and a recovery truck. Drive into the blue PIT box to repair.</p>
+          <p class="sub" data-for="online">Online races use Race handling and have no crash damage, because the two cars cannot touch.</p>
+
+          <h3 class="sec" data-for="battle solo">Opponents</h3>
+          <label data-for="battle">Rival cars
+            <select id="rivals-select">
+              <option value="3">3 rivals</option>
+              <option value="5">5 rivals</option>
+              <option value="1">1 rival</option>
+            </select>
+          </label>
+          <label data-for="battle">Rival difficulty
+            <select id="difficulty-select">
+              <option value="easy">Easy</option>
+              <option value="medium">Medium</option>
+              <option value="hard">Hard</option>
+            </select>
+          </label>
+          <label data-for="solo">Solo mode
+            <select id="solo-mode-select">
+              <option value="race">Timed laps (just you)</option>
+              <option value="free">Free roam (no timing)</option>
+            </select>
+          </label>
+
+          <h3 class="sec">Display</h3>
+          <label>Graphics
+            <select id="quality-select">
+              <option value="low">Low (best for phones)</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </label>
+          <label class="check"><input type="checkbox" id="set-fps" /> Show frame rate (FPS) while racing</label>
+          <p class="keys">W/↑ throttle · S/↓ brake and reverse · A D/←→ steer · Space handbrake (flick it in a corner to drift) · R reset to track · C camera · L street lights · M sound · P pause</p>
+        </div>
+        <div class="menu-foot">
+          <button id="modes-btn" class="secondary">Daily challenge · Season · Unlocks</button>
+          <button id="start-btn">Start battle</button>
+          <div class="foot-row">
+            <button id="history-btn" class="secondary">History</button>
+            <button id="ach-btn" class="secondary">Achievements</button>
+            <button id="help-btn" class="secondary">How to play</button>
+            <button id="settings-btn" class="secondary">Settings</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <canvas id="confetti" aria-hidden="true"></canvas>
+
+    <div id="fps-badge" class="hidden"></div>
+    <div id="hud" class="hidden">
+      <div id="hud-top">
+        <div class="stat"><span class="label">LAP</span><span id="hud-lap">1</span></div>
+        <div class="stat"><span class="label">TIME</span><span id="hud-time">0:00.000</span></div>
+        <div class="stat hidden" id="stat-pos"><span class="label">POS</span><span id="hud-pos">1/1</span></div>
+        <div class="stat only-landscape"><span class="label">LEFT</span><span id="hud-left">0</span></div>
+        <div class="stat"><span class="label">BEST</span><span id="hud-best">--</span></div>
+        <div class="stat"><span class="label">LAST</span><span id="hud-last">--</span></div>
+      </div>
+      <div id="hud-sectors"></div>
+      <div id="hud-versus" class="hidden" aria-live="polite"></div>
+      <div id="hud-ghost" class="hidden"></div>
+      <div id="hud-tyres" class="hidden" aria-live="off"><span id="tyre-dot"></span><span id="tyre-text"></span><span class="bar"><i id="tyre-bar"></i></span></div>
+      <div id="hud-pit" class="hidden" aria-live="polite"><span id="pit-text"></span><span class="bar"><i id="pit-bar"></i></span></div>
+      <div id="hud-flag" class="hidden" aria-live="assertive"></div>
+      <div id="hud-damage" class="hidden" aria-live="off"><svg viewBox="0 0 60 100" width="42" height="70" aria-hidden="true">
+        <g stroke="#000" stroke-opacity=".5" stroke-width="1">
+          <rect data-z="frontWing" x="10" y="2" width="40" height="6" rx="2"/>
+          <rect data-z="floor" x="22" y="12" width="16" height="70" rx="6"/>
+          <rect data-z="left" x="39" y="34" width="12" height="28" rx="4"/>
+          <rect data-z="right" x="9" y="34" width="12" height="28" rx="4"/>
+          <rect data-z="engine" x="24" y="56" width="12" height="18" rx="3"/>
+          <rect data-z="rearWing" x="12" y="90" width="36" height="6" rx="2"/>
+          <rect data-z="wheelFL" x="48" y="14" width="9" height="16" rx="3"/>
+          <rect data-z="wheelFR" x="3" y="14" width="9" height="16" rx="3"/>
+          <rect data-z="wheelRL" x="48" y="66" width="9" height="20" rx="3"/>
+          <rect data-z="wheelRR" x="3" y="66" width="9" height="20" rx="3"/>
+        </g></svg><span id="dmg-text"></span></div>
+      <div id="hud-drift" class="hidden" aria-live="polite"></div>
+      <div id="grid" class="hidden">
+        <h3 id="grid-title">Fastest drivers</h3>
+        <ol id="grid-list"></ol>
+      </div>
+      <div id="hud-speed">
+        <div class="spd"><span id="hud-kmh">0</span><small>km/h</small></div>
+        <div class="gear"><span id="hud-gear">N</span><small>GEAR</small></div>
+        <span class="bar rpm"><i id="hud-rpm"></i></span>
+      </div>
+      <div id="hud-toast" aria-live="polite"></div>
+      <div id="countdown" aria-live="assertive"></div>
+      <canvas id="minimap" width="180" height="180" aria-label="Track minimap"></canvas>
+      <div id="hud-buttons">
+        <button id="btn-pause">Pause</button>
+        <button id="btn-export">CSV</button>
+        <button id="btn-export-json">JSON</button>
+        <button id="btn-menu">Menu</button>
+      </div>
+    </div>
+
+    <div id="touch" class="hidden">
+      <div class="touch-group steer">
+        <button data-key="left" class="steer-btn" aria-label="Steer left">◀</button>
+        <button data-key="right" class="steer-btn" aria-label="Steer right">▶</button>
+        <div id="wheel" class="hidden" role="slider" aria-label="Steering wheel: drag left or right"><div id="wheel-rim"><i></i></div></div>
+      </div>
+      <div class="touch-group pedals">
+        <button data-key="brake">BRAKE</button>
+        <button data-key="throttle">GAS</button>
+      </div>
+      <button class="hb" data-key="handbrake" aria-label="Handbrake, flick in a corner to drift">DRIFT</button>
+    </div>
+
+    <div id="pause" class="overlay hidden">
+      <div class="panel">
+        <h1>PAUSED</h1>
+        <button id="resume-btn">Resume</button>
+        <button id="restart-btn" class="secondary">Restart session</button>
+        <button id="pause-menu-btn" class="secondary">Main menu</button>
+      </div>
+    </div>
+
+    <div id="results" class="overlay hidden">
+      <div class="panel wide">
+        <h1>SESSION <span>COMPLETE</span></h1>
+        <div id="results-versus"></div>
+        <div id="results-body"></div>
+        <p id="results-points" class="points hidden"></p>
+        <p id="results-drift" class="points hidden"></p>
+        <div id="results-extra" class="extra hidden"></div>
+        <ul id="results-ach" class="ach-list hidden"></ul>
+        <button id="results-restart">Race again</button>
+        <button id="results-replay" class="secondary hidden">Watch best lap</button>
+        <button id="results-share" class="secondary">Share result card</button>
+        <button id="results-export" class="secondary">Export telemetry (CSV)</button>
+        <button id="results-menu" class="secondary">Main menu</button>
+      </div>
+    </div>
+
+    <div id="settings" class="overlay hidden">
+      <div class="panel wide">
+        <h1>SET<span>TINGS</span></h1>
+        <label>Steering speed <span id="set-steer-val" class="val"></span>
+          <input id="set-steer" type="range" min="0.5" max="1.6" step="0.1" />
+        </label>
+        <p class="sub">How quickly keyboard and touch steering builds. Lower is gentler.</p>
+        <label>Steering sensitivity <span id="set-sens-val" class="val"></span>
+          <input id="set-sens" type="range" min="0.6" max="1.6" step="0.05" />
+        </label>
+        <p class="sub">How much of the wheel lock a full press, drag or tilt uses. Lower is easier for beginners; the car also steers less at high speed automatically.</p>
+        <label>High-speed steering feel
+          <select id="set-feel">
+            <option value="calm">Calm: planted, hard to spin</option>
+            <option value="standard">Standard</option>
+            <option value="sharp">Sharp: quick turn-in, needs care</option>
+          </select>
+        </label>
+        <p class="sub">Only changes how the car steers at high speed. Online 1v1 races always use Standard so both drivers are equal.</p>
+        <label>Driving assist (Race handling)
+          <select id="set-assist">
+            <option value="off">Off</option>
+            <option value="low">Low: helps catch a slide</option>
+            <option value="high">High: stability control</option>
+          </select>
+        </label>
+        <label>Volume <span id="set-volume-val" class="val"></span>
+          <input id="set-volume" type="range" min="0" max="1" step="0.05" />
+        </label>
+        <h2>Screen and touch controls</h2>
+        <label>Screen layout
+          <select id="set-layout">
+            <option value="auto">Automatic: follow the phone</option>
+            <option value="portrait">Portrait (upright)</option>
+            <option value="landscape">Landscape (sideways)</option>
+          </select>
+        </label>
+        <p class="sub">Picking a layout the phone is not held in turns the game on screen, so it also works where the browser cannot lock rotation. The race is never restarted.</p>
+        <label>Steering controls
+          <select id="set-ctrlstyle">
+            <option value="buttons">Two buttons</option>
+            <option value="wheel">Steering wheel (drag)</option>
+          </select>
+        </label>
+        <label class="check"><input id="set-swap" type="checkbox" /> Swap hands: pedals on the left, steering on the right</label>
+        <label class="check"><input id="set-easy" type="checkbox" /> Easy drive: automatic gas, gentler steering, stability control</label>
+        <p class="sub">Sizes below apply to the layout you are using now (<strong id="set-which"></strong>); the other one keeps its own.</p>
+        <label>Button size <span id="set-scale-val" class="val"></span>
+          <input id="set-scale" type="range" min="0.7" max="1.5" step="0.05" />
+        </label>
+        <label>Button opacity <span id="set-opacity-val" class="val"></span>
+          <input id="set-opacity" type="range" min="0.3" max="1" step="0.05" />
+        </label>
+        <label>Raise controls <span id="set-raise-val" class="val"></span>
+          <input id="set-raise" type="range" min="0" max="140" step="5" />
+        </label>
+        <label class="check"><input id="set-tilt" type="checkbox" /> Tilt steering (turn the phone like a wheel)</label>
+        <div id="tilt-opts">
+          <label>Tilt sensitivity <span id="set-tiltsens-val" class="val"></span>
+            <input id="set-tiltsens" type="range" min="0.4" max="2.5" step="0.1" />
+          </label>
+          <label class="check"><input id="set-tiltinv" type="checkbox" /> Reverse tilt direction</label>
+          <button id="tilt-cal" class="secondary small">Calibrate: hold the phone how you like, then tap</button>
+          <p id="tilt-status" class="sub"></p>
+        </div>
+        <h2>Controller</h2>
+        <p id="pad-status" class="sub"></p>
+        <label>Stick dead zone <span id="set-dead-val" class="val"></span>
+          <input id="set-dead" type="range" min="0.04" max="0.3" step="0.01" />
+        </label>
+        <label>Stick response (higher = softer near the centre) <span id="set-curve-val" class="val"></span>
+          <input id="set-curve" type="range" min="1" max="2.5" step="0.1" />
+        </label>
+        <label class="check"><input id="set-vibe" type="checkbox" /> Controller rumble on hits</label>
+        <p class="sub">Right trigger gas · left trigger brake · left stick or D-pad steer · A or B handbrake / drift · Y camera · X reset · Start pause · Back mute.</p>
+        <button id="settings-close">Done</button>
+        <button id="settings-reset" class="secondary">Reset to defaults</button>
+      </div>
+    </div>
+
+    <div id="challenges" class="overlay hidden">
+      <div class="panel wide">
+        <h1>DAILY <span>&amp; SEASON</span></h1>
+        <h2>Daily challenge</h2>
+        <div id="daily-box"></div>
+        <button id="daily-start">Start today's challenge</button>
+        <h2>Championship</h2>
+        <div id="season-box"></div>
+        <button id="season-start">Start a season</button>
+        <button id="season-reset" class="secondary hidden">Start over</button>
+        <h2>Car colours</h2>
+        <p id="unlock-line" class="sub"></p>
+        <button id="challenges-close" class="secondary">Back</button>
+      </div>
+    </div>
+
+    <div id="ach" class="overlay hidden">
+      <div class="panel wide">
+        <h1>ACHIEVE<span>MENTS</span></h1>
+        <p id="ach-count" class="sub"></p>
+        <ul id="ach-list" class="ach-list"></ul>
+        <button id="ach-close">Close</button>
+      </div>
+    </div>
+
+    <div id="tutorial" class="overlay hidden">
+      <div class="panel">
+        <h2>How to drive</h2>
+        <ul id="tutorial-list" class="tut-list"></ul>
+        <button id="tutorial-go">Got it, let's race</button>
+      </div>
+    </div>
+    <div id="replay-bar" class="hidden">
+      <span id="replay-clock">0:00.000</span>
+      <button id="replay-cam" class="secondary">Camera: Chase</button>
+      <button id="replay-restart" class="secondary">Restart</button>
+      <button id="replay-card" class="secondary">Lap image</button>
+      <button id="replay-close">Back</button>
+    </div>
+    <div id="share" class="overlay hidden">
+      <div class="panel wide">
+        <h1>SHARE <span>CARD</span></h1>
+        <img id="share-img" alt="Your race result card" />
+        <p class="sub">Press and hold the picture to save it, or use the buttons. It is made on your device and not uploaded anywhere.</p>
+        <button id="share-send">Share</button>
+        <a id="share-download" class="btn secondary" download="trackrush-result.png">Download PNG</a>
+        <button id="share-close" class="secondary">Close</button>
+      </div>
+    </div>
+
+    <div id="mp" class="overlay hidden">
+      <div class="panel wide">
+        <h1>1 VS 1 <span>ONLINE</span></h1>
+        <p class="sub">Races use a small relay server (run <code>npm run server</code>, or use one a friend hosts). Both players connect to the same address.</p>
+        <label>Relay server address
+          <input id="mp-url" type="text" value="ws://localhost:8787" autocomplete="off" spellcheck="false" />
+        </label>
+        <button id="mp-connect">Connect</button>
+        <p id="mp-status" class="sub">Not connected.</p>
+        <p id="mp-sync" class="sub"></p>
+        <label>Data store address (optional, https://…workers.dev)
+          <input id="mp-data-url" type="text" value="" placeholder="leave empty to use the relay" autocomplete="off" spellcheck="false" />
+        </label>
+        <p class="sub">Your driver ID: <strong id="mp-myid"></strong> <button id="mp-copy" class="secondary small">Copy</button></p>
+        <label>Your car colour <span id="mp-swatch" class="swatch" aria-hidden="true"></span>
+          <select id="mp-colour"></select>
+        </label>
+        <p class="sub">Pick it before you connect or search. Your opponent sees this colour on your car.</p>
+        <div id="mp-actions" class="hidden">
+          <p class="sub">Race track: <strong id="mp-track"></strong> (change it on the main menu)</p>
+          <label>Friend's driver ID
+            <input id="mp-friend" type="text" maxlength="16" autocomplete="off" spellcheck="false" />
+          </label>
+          <button id="mp-invite">Invite friend</button>
+          <button id="mp-quick" class="secondary">Race a stranger</button>
+          <button id="mp-cancel" class="secondary hidden">Cancel</button>
+        </div>
+        <div id="mp-invite-box" class="hidden">
+          <p id="mp-invite-text"></p>
+          <button id="mp-accept">Accept</button>
+          <button id="mp-decline" class="secondary">Decline</button>
+        </div>
+        <button id="mp-back" class="secondary">Back</button>
+      </div>
+    </div>
+
+    <div id="history" class="overlay hidden">
+      <div class="panel wide">
+        <h1>RACE <span>HISTORY</span></h1>
+        <label>Show
+          <select id="history-scope">
+            <option value="mine">My races</option>
+            <option value="all">Everyone on this device</option>
+          </select>
+        </label>
+        <div id="history-body"></div>
+        <button id="history-clear" class="secondary">Clear all saved races</button>
+        <button id="history-close" class="secondary">Back</button>
+      </div>
+    </div>
+
+    <div id="error" class="overlay hidden">
+      <div class="panel"><h1>Something went wrong</h1><p id="error-text"></p></div>
+    </div>
+
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
