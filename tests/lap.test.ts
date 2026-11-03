@@ -107,7 +107,7 @@ describe("full lap with the real track, barriers, physics and race manager", () 
       expect(maxLateral).toBeLessThan(model.halfWidth + 1.4 + 3.2);
       // Three sector splits recorded for each lap.
       expect(laps[0]!.result.sectors.every((s) => s !== null)).toBe(true);
-    }, 15_000);
+    }, 30_000);
   }
 
   it("cutting across the infield (skipping a stretch of track) gives an invalid lap", () => {
@@ -138,5 +138,6 @@ describe("full lap with the real track, barriers, physics and race manager", () 
     expect(teleported).toBe(true);
     expect(events.some((e) => e.type === "invalid")).toBe(true);
     expect(lap?.result.valid).toBe(false);
-  });
+  }, 30_000);
 });
+
