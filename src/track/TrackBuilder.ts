@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { buildGrandstands } from "./Grandstands";
+import { buildBillboards, getTrackrushLogoTexture } from "./Billboards";
 import type RAPIER from "@dimforge/rapier3d-compat";
 import type { TrackModel } from "./TrackModel";
 import type { PitBox } from "../race/pit";
@@ -47,6 +48,40 @@ function ribbon(model: TrackModel, offA: number, offB: number, y: number, color:
   g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
   g.computeVertexNormals();
   return g;
+}
+
+function roadLogoGeometry(model: TrackModel, y: number): THREE.BufferGeometry {
+  const spacing = model.length / model.count;
+  const width = Math.min(7.5, model.halfWidth * 1.05);
+  const length = width * (768 / 1202);
+  const halfSteps = Math.max(1, Math.ceil(length / (2 * spacing)));
+  const pos: number[] = [];
+  const uv: number[] = [];
+  const indices: number[] = [];
+
+  for (let decal = 0; decal < 16; decal++) {
+    const center = Math.floor(model.count * ((decal + 0.5) / 16));
+    const firstVertex = pos.length / 3;
+    for (let step = -halfSteps; step <= halfSteps; step++) {
+      const sample = model.samples[(center + step + model.count) % model.count]!;
+      const v = (step + halfSteps) / (halfSteps * 2);
+      for (const [offset, u] of [[-width / 2, 0], [width / 2, 1]] as const) {
+        pos.push(sample.x + sample.nx * offset, y, sample.z + sample.nz * offset);
+        uv.push(u, v);
+      }
+      if (step < halfSteps) {
+        const i = firstVertex + (step + halfSteps) * 2;
+        indices.push(i, i + 1, i + 2, i + 1, i + 3, i + 2);
+      }
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
 }
 
 /** Barrier wall (inner face + top) on one side. side = -1 left, +1 right. */
@@ -159,6 +194,38 @@ export function buildTrackMeshes(model: TrackModel): THREE.Group {
     new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }),
   );
   group.add(dash);
+
+  const logoBacking = new THREE.Mesh(
+    roadLogoGeometry(model, 0.042),
+    new THREE.MeshStandardMaterial({
+      color: 0x030711,
+      roughness: 1,
+      polygonOffset: true,
+      polygonOffsetFactor: -5,
+      polygonOffsetUnits: -5,
+      side: THREE.DoubleSide,
+    }),
+  );
+  logoBacking.name = "worklyft-road-logo-background";
+  logoBacking.receiveShadow = true;
+  group.add(logoBacking);
+
+  const logo = new THREE.Mesh(
+    roadLogoGeometry(model, 0.044),
+    new THREE.MeshStandardMaterial({
+      map: getTrackrushLogoTexture(),
+      transparent: true,
+      alphaTest: 0.01,
+      roughness: 1,
+      polygonOffset: true,
+      polygonOffsetFactor: -5,
+      polygonOffsetUnits: -5,
+      side: THREE.DoubleSide,
+    }),
+  );
+  logo.name = "worklyft-road-logo";
+  logo.receiveShadow = true;
+  group.add(logo);
 
   // Start / finish line.
   const g0 = model.gates[0]!;
@@ -344,6 +411,7 @@ export function buildScenery(model: TrackModel, treeCount = 260): THREE.Group {
 
   // Public grandstands with spectators, outside the barriers.
   group.add(buildGrandstands(model, model.halfWidth + CURB_WIDTH + BARRIER_GAP + 9, model.def.id.length));
+  group.add(buildBillboards(model));
   return group;
 }
 

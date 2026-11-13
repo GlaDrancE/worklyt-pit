@@ -2,7 +2,8 @@ import type { Game, RaceOutcome, RivalOptions } from "../game/Game";
 import type { Difficulty } from "../race/Rivals";
 import type { TrackDef } from "../track/tracks";
 import { loadSetting, saveSetting } from "../race/storage";
-import { loadHistory, summarize, generateDriverName } from "../race/history";
+import { loadHistory, summarize } from "../race/history";
+import { rivalCompanyNames } from "../race/companies";
 import { addDailyResult, dailyChallenge, dateKey, sanitizeDaily, stars, streak, type DailyResult } from "../race/daily";
 import { CAR_COLOURS, newlyUnlocked, nextColour, pickColour } from "../race/unlocks";
 import { currentTrack, isFinished, newSeason, pointsForPlace, recordRound, sanitizeSeason, standings, type Season } from "../race/championship";
@@ -160,15 +161,7 @@ export function setupModes(ctx: ModesCtx): { clearActive(): void } {
   });
 
   const freshSeason = (): Season => {
-    const used = new Set<string>();
-    const names: string[] = [];
-    while (names.length < SEASON_RIVALS) {
-      const n = generateDriverName();
-      if (!used.has(n)) {
-        used.add(n);
-        names.push(n);
-      }
-    }
+    const names = rivalCompanyNames(SEASON_RIVALS, Math.random, SEASON_RIVALS + 2);
     return newSeason(String(Date.now()), ctx.tracks.slice(0, MAX_ROUNDS).map((t) => t.id), names);
   };
   const saveSeason = () => saveSetting("season", JSON.stringify(season));

@@ -1,6 +1,7 @@
 import { cleanName } from "../net/protocol";
 import { LAYOUT_EPOCH } from "../track/tracks";
 import type { LapResult } from "./RaceManager";
+import { companyForPlayer, isCompanyName, WORKLYFT } from "./companies";
 
 /** One race (or abandoned race) saved on this device. */
 export interface RaceRecord {
@@ -71,19 +72,24 @@ export function newId(rand: () => number = Math.random): string {
 export { cleanName };
 
 /** Loads the saved driver, or creates one with a generated name on first visit. */
-export function loadProfile(store: StorageLike | null = browserStorage(), rand: () => number = Math.random): DriverProfile {
+export function loadProfile(store: StorageLike | null = browserStorage(), rand: () => number = Math.random, fieldSize = 4): DriverProfile {
   try {
     const raw = store?.getItem(PROFILE_KEY);
     if (raw) {
       const p = JSON.parse(raw) as Partial<DriverProfile>;
       if (typeof p.id === "string" && typeof p.name === "string" && cleanName(p.name)) {
-        return { id: p.id, name: cleanName(p.name) };
+        const savedName = cleanName(p.name);
+        const name = isCompanyName(savedName) && savedName !== WORKLYFT ? savedName : companyForPlayer(p.id, fieldSize);
+        const profile = { id: p.id, name };
+        if (name !== p.name) saveProfile(profile, store);
+        return profile;
       }
     }
   } catch {
     /* fall through and create a new profile */
   }
-  const profile = { id: newId(rand), name: generateDriverName(rand) };
+  const id = newId(rand);
+  const profile = { id, name: companyForPlayer(id, fieldSize) };
   saveProfile(profile, store);
   return profile;
 }

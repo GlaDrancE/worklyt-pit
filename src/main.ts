@@ -10,7 +10,8 @@ import { loadSetting, saveSetting } from "./race/storage";
 import { CAR_COLOURS, colourName } from "./race/unlocks";
 import { syncPlayer } from "./net/playerSync";
 import { historyEvents } from "./race/history";
-import { cleanName, clearHistory, generateDriverName, leaderboard, loadHistory, loadProfile, saveProfile } from "./race/history";
+import { cleanName, clearHistory, leaderboard, loadHistory, loadProfile, saveProfile } from "./race/history";
+import { isCompanyName, WORKLYFT } from "./race/companies";
 import { Multiplayer, type MatchInfo } from "./net/Multiplayer";
 import { Confetti } from "./ui/Confetti";
 import { renderHistory } from "./ui/HistoryView";
@@ -106,7 +107,7 @@ async function boot(): Promise<void> {
   });
   const rivalsSelect = byId<HTMLSelectElement>("rivals-select");
   const difficultySelect = byId<HTMLSelectElement>("difficulty-select");
-  rivalsSelect.value = ["1", "3", "5"].includes(loadSetting("rivals", "3")) ? loadSetting("rivals", "3") : "3";
+  rivalsSelect.value = ["1", "2", "5"].includes(loadSetting("rivals", "2")) ? loadSetting("rivals", "2") : "2";
   soloModeSelect.value = loadSetting("soloMode", "race") === "free" ? "free" : "race";
   soloModeSelect.addEventListener("change", () => saveSetting("soloMode", soloModeSelect.value));
   difficultySelect.value = ["easy", "medium", "hard"].includes(loadSetting("difficulty", "medium")) ? loadSetting("difficulty", "medium") : "medium";
@@ -425,7 +426,7 @@ async function boot(): Promise<void> {
   });
 
   // Driver profile -----------------------------------------------------------
-  const profile = loadProfile();
+  const profile = loadProfile(undefined, Math.random, Number(rivalsSelect.value) + 1);
   const nameInput = byId<HTMLInputElement>("driver-name");
   const idLine = byId("driver-id");
   nameInput.value = profile.name;
@@ -434,7 +435,8 @@ async function boot(): Promise<void> {
   };
   showId();
   const commitName = () => {
-    const cleaned = cleanName(nameInput.value) || generateDriverName();
+    const entered = cleanName(nameInput.value);
+    const cleaned = isCompanyName(entered) && entered !== WORKLYFT ? entered : profile.name;
     profile.name = cleaned;
     nameInput.value = cleaned;
     saveProfile(profile);
@@ -599,15 +601,6 @@ async function boot(): Promise<void> {
       showTouch(true);
     });
   }
-  const toMenu = (): void => {
-    if (game.isVersus || client.phase === "racing") client.leave();
-    game.toMenu();
-    pause.classList.add("hidden");
-    showTouch(false);
-    menu.classList.remove("hidden");
-  };
-
-
   // Online 1v1 ---------------------------------------------------------------
   const mpPanel = byId("mp");
   const mpStatus = byId("mp-status");
@@ -618,9 +611,11 @@ async function boot(): Promise<void> {
   // Opened from another device on the same network (http://192.168.x.x:5173)? The relay runs on that same PC,
   // so aim at it instead of "localhost", which on a phone would mean the phone itself.
   const savedRelay = loadSetting("relay", "");
+  const configuredRelay = import.meta.env.VITE_RELAY_URL?.trim() ?? "";
   if (savedRelay) mpUrl.value = savedRelay;
+  else if (configuredRelay) mpUrl.value = configuredRelay;
   else if (location.protocol === "http:" && location.hostname) mpUrl.value = `ws://${location.hostname}:8787`;
-  else if (location.protocol === "https:") mpUrl.value = "wss://";
+  else mpUrl.value = "";
   const mpFriend = byId<HTMLInputElement>("mp-friend");
   byId("mp-myid").textContent = profile.id;
   for (const input of [mpUrl, mpFriend]) {
@@ -642,11 +637,17 @@ async function boot(): Promise<void> {
   };
   const updateMpTrack = () => (byId("mp-track").textContent = parseKey(onlineKey()).text);
   const client = new Multiplayer({ id: profile.id, name: profile.name });
+  let autoQuickSearchStarted = false;
   mp = client;
   game.onSendState = (st) => client.sendState(st);
   game.onFinish = (ms) => client.sendFinish(ms);
   game.onValidLap = (trackId, ms) => client.submitLap(trackId, ms);
-  client.events.status = (t) => (mpStatus.textContent = t);
+  client.events.status = (t) => {
+    mpStatus.textContent = t;
+    if (t.startsWith("Couldn't") || t.startsWith("The server didn't answer") || t.startsWith("That server") || t.startsWith("Use a secure") || t.startsWith("This race is full")) {
+      hud.toast(t, 6000);
+    }
+  };
   // Back up the driver's name and race history on the relay whenever it is connected.
   let backupTimer = 0;
   const dataUrl = byId<HTMLInputElement>("mp-data-url");
@@ -679,7 +680,12 @@ async function boot(): Promise<void> {
       client.requestBoard(trackSelect.value);
       drawRanking();
       void backup();
+      if (game.phase === "playing" && !autoQuickSearchStarted) {
+        autoQuickSearchStarted = true;
+        client.quick(onlineKey());
+      }
     }
+    if (p === "queued") hud.toast("Waiting for another driver to join this track…", 4000);
   };
   client.events.invite = (from, trackId) => {
     mpInviteBox.classList.toggle("hidden", !from);
@@ -699,15 +705,27 @@ async function boot(): Promise<void> {
     mpStatus.textContent = `Matched with ${m.opponent.name}${theirs ? ` (${theirs} car)` : ""}! Get ready…`;
   };
   client.events.start = (m: MatchInfo) => {
-    commitName();
-    mpPanel.classList.add("hidden");
-    menu.classList.add("hidden");
-    pause.classList.add("hidden");
     const pk = parseKey(m.trackId);
-    game.start(pk.track, "race", { opponent: m.opponent, slot: m.slot, conditions: pk.cond });
-    showTouch(true);
+    if (!game.joinOnlineRace(pk.track, { opponent: m.opponent, slot: m.slot, conditions: pk.cond })) {
+      mpStatus.textContent = "Couldn't join the live race. Check that you and the other driver are on the same circuit.";
+      hud.toast(mpStatus.textContent, 5000);
+      client.leave();
+    }
   };
-  client.events.opponent = (st) => game.receiveOpponent(st);
+  client.events.room = (room, selfId) => {
+    const pk = parseKey(room.trackId);
+    trackSelect.value = pk.track;
+    describe();
+    if (!game.joinOnlineRoom(pk.track, room.id, room.racers, selfId, pk.cond)) {
+      mpStatus.textContent = "Couldn't join the live race. Check that you and the other drivers are on the same circuit.";
+      hud.toast(mpStatus.textContent, 5000);
+      client.leave();
+    }
+  };
+  client.events.playerJoined = (roomId, player) => game.addOnlinePlayer(roomId, player);
+  client.events.playerLeft = (roomId, id, name) => game.onlinePlayerLeft(roomId, id, name);
+  client.events.playerFinished = (roomId, id, name, ms) => game.onlinePlayerFinished(roomId, id, name, ms);
+  client.events.opponent = (id, st) => game.receiveOpponent(st, id);
   client.events.oppFinished = (name, ms) => game.opponentFinished(name, ms);
   client.events.oppLeft = (name) => game.opponentLeft(name);
   client.events.result = (standings, forfeit) => game.applyResult(standings, forfeit);
@@ -782,22 +800,26 @@ async function boot(): Promise<void> {
     pause.classList.add("hidden");
   });
   byId("restart-btn").addEventListener("click", begin);
-  byId("pause-menu-btn").addEventListener("click", toMenu);
   byId("btn-pause").addEventListener("click", () => {
     game.pause();
     if (game.phase === "paused") pause.classList.remove("hidden");
   });
   byId("btn-export").addEventListener("click", () => game.exportTelemetry("csv"));
   byId("btn-export-json").addEventListener("click", () => game.exportTelemetry("json"));
-  byId("btn-menu").addEventListener("click", toMenu);
   byId("results-restart").addEventListener("click", () => {
     if (game.lastRaceWasVersus) {
-      toMenu();
+      client.leave();
       updateMpTrack();
-      mpPanel.classList.remove("hidden");
+      startWhenReady(() => {
+        game.start(trackSelect.value, "race", undefined, {
+          count: Number(rivalsSelect.value) || 2,
+          difficulty: difficultySelect.value as Difficulty,
+        });
+        showTouch(true);
+        openMp();
+      });
     } else begin();
   });
-  byId("results-menu").addEventListener("click", toMenu);
   byId("results-export").addEventListener("click", () => game.exportTelemetry("csv"));
   game.onPauseChange = (paused) => pause.classList.toggle("hidden", !paused);
 
@@ -805,7 +827,19 @@ async function boot(): Promise<void> {
   (window as unknown as { __trackrush: Game }).__trackrush = game;
 
   byId("loading").classList.add("hidden");
-  menu.classList.remove("hidden");
+  commitName();
+  modes.clearActive();
+  startWhenReady(() => {
+    game.start(trackSelect.value, "race", undefined, {
+      count: Number(rivalsSelect.value) || 2,
+      difficulty: difficultySelect.value as Difficulty,
+    });
+    showTouch(true);
+    client.updateName(profile.name);
+    const relayAddress = mpUrl.value.trim();
+    if (relayAddress) void client.connect(relayAddress);
+    else hud.toast("Online multiplayer needs a WebSocket relay URL. Configure VITE_RELAY_URL to enable it.", 6000);
+  });
 }
 
 window.addEventListener("error", (e) => {

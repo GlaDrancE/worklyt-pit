@@ -1,6 +1,6 @@
 import { NetClient } from "./NetClient";
 import { isSafeAddress, playerToken } from "./playerSync";
-import type { BoardEntry, PlayerInfo, PlayerState, ServerMsg, Standing } from "./protocol";
+import type { BoardEntry, LiveRoom, PlayerInfo, PlayerState, ServerMsg, Standing } from "./protocol";
 
 export type MpPhase = "offline" | "connecting" | "online" | "queued" | "matched" | "racing";
 
@@ -17,17 +17,23 @@ export interface MpEvents {
   invite?: (from: PlayerInfo | null, trackId: string) => void;
   match?: (m: MatchInfo) => void;
   start?: (m: MatchInfo) => void;
-  opponent?: (s: PlayerState) => void;
+  room?: (room: LiveRoom, selfId: string) => void;
+  playerJoined?: (roomId: string, player: PlayerInfo) => void;
+  playerLeft?: (roomId: string, id: string, name: string) => void;
+  playerFinished?: (roomId: string, id: string, name: string, totalMs: number) => void;
+  opponent?: (id: string, s: PlayerState) => void;
   oppFinished?: (name: string, totalMs: number) => void;
   oppLeft?: (name: string) => void;
   result?: (standings: Standing[], forfeit: boolean) => void;
   board?: (trackId: string, entries: BoardEntry[]) => void;
+  watchSnapshot?: (rooms: LiveRoom[]) => void;
 }
 
-/** Client-side state machine for 1v1 matches: invites by ID, quick match and race sync. */
+/** Client-side state machine for race rooms and legacy direct invites. */
 export class Multiplayer {
   phase: MpPhase = "offline";
   match: MatchInfo | null = null;
+  roomId: string | null = null;
   readonly board = new Map<string, BoardEntry[]>();
   events: MpEvents = {};
   private readonly net = new NetClient();
@@ -38,6 +44,7 @@ export class Multiplayer {
     this.net.onMessage = (m) => this.onMessage(m);
     this.net.onClose = (why) => {
       this.match = null;
+      this.roomId = null;
       this.pendingInvite = null;
       this.setPhase("offline");
       this.events.status?.(why);
@@ -80,6 +87,7 @@ export class Multiplayer {
     window.clearTimeout(this.readyTimer);
     this.net.close();
     this.match = null;
+    this.roomId = null;
     this.setPhase("offline");
     this.events.status?.("Disconnected.");
   }
@@ -99,6 +107,7 @@ export class Multiplayer {
   }
 
   quick(trackId: string): void {
+    this.setPhase("queued");
     this.net.send({ t: "quick", trackId });
   }
 
@@ -108,6 +117,7 @@ export class Multiplayer {
     if (!this.connected) return;
     this.net.send({ t: "leave" });
     this.match = null;
+    this.roomId = null;
     this.setPhase("online");
   }
 
@@ -141,6 +151,7 @@ export class Multiplayer {
       case "error":
         this.events.status?.(m.msg);
         if (this.phase === "connecting") this.setPhase("offline");
+        else if (this.phase === "queued") this.setPhase("online");
         break;
       case "invited":
         this.pendingInvite = m.from;
@@ -162,6 +173,21 @@ export class Multiplayer {
         this.readyTimer = window.setTimeout(() => this.net.send({ t: "ready" }), 1500);
         break;
       }
+      case "roomJoined":
+        this.match = null;
+        this.roomId = m.room.id;
+        this.setPhase("racing");
+        this.events.room?.(m.room, m.selfId);
+        break;
+      case "playerJoined":
+        this.events.playerJoined?.(m.roomId, m.player);
+        break;
+      case "playerLeft":
+        this.events.playerLeft?.(m.roomId, m.id, m.name);
+        break;
+      case "playerFinished":
+        this.events.playerFinished?.(m.roomId, m.id, m.name, m.totalMs);
+        break;
       case "start":
         if (this.match) {
           this.setPhase("racing");
@@ -169,9 +195,13 @@ export class Multiplayer {
         }
         break;
       case "opp":
-        this.events.opponent?.(m.s);
+        this.events.opponent?.(m.id ?? this.match?.opponent.id ?? "", m.s);
         break;
       case "oppFinished":
+        if (m.id) {
+          this.events.playerFinished?.(this.roomId ?? "", m.id, m.name, m.totalMs);
+          break;
+        }
         this.events.oppFinished?.(m.name, m.totalMs);
         break;
       case "oppLeft":
@@ -179,12 +209,16 @@ export class Multiplayer {
         break;
       case "result":
         this.match = null;
+        this.roomId = null;
         this.setPhase("online");
         this.events.result?.(m.standings, m.forfeit);
         break;
       case "board":
         this.board.set(m.trackId, m.entries);
         this.events.board?.(m.trackId, m.entries);
+        break;
+      case "watchSnapshot":
+        this.events.watchSnapshot?.(m.rooms);
         break;
     }
   }

@@ -6,7 +6,7 @@
 src/
   game/       Game loop, input, environment, quality, replay, settings
   vehicle/    Car physics (Rapier), car model, chase camera, steering config
-  track/      Track geometry, meshes, barrier colliders, minimap
+  track/      Track geometry, meshes, billboards, barrier colliders, minimap
   race/       Lap timing, rivals, tyres, pit stops, ghost, history, unlocks
   audio/      Synthesised engine, pit-crew and crowd sound
   telemetry/  Recording and CSV/JSON export
@@ -22,6 +22,8 @@ tests/        Vitest tests
 Track geometry and race rules don't depend on rendering or physics, which keeps them easy to test.
 
 `src/game/Game.ts` runs the session. Its helpers are split out: `sceneHelpers.ts` (liveries, fading, grid positions, labels, clean-up), `sessionTypes.ts` (the shape of a session) and `ReplayController.ts` (best-lap replay and lap image).
+
+`track/Billboards.ts` places roadside signs and uses the supplied transparent logo image as their artwork.
 
 ## Tuning files
 
@@ -41,11 +43,11 @@ The car is built from a supplied F1 scan (`tools/f1-car-source.glb`, an untextur
 
 Wheels aren't taken from the scan. `CarView` builds them in code: a round tyre, yellow compound band, domed cover, hub nut and a brake drum that steers without spinning, slim at the front and wide at the rear. The detailed car also gets wishbones, a push-rod and a track rod to each front hub that follow the bump and steering. If the model fails to load the game falls back to a built-in car.
 
-The model is loaded in the background after the menu appears.
+The model is loaded in the background while the game prepares its default race.
 
 ## Loading and performance
 
-The menu shows first. The physics engine (WebAssembly) and the car model load in separate chunks, and Start waits for them only if needed. Quality starts at Low on phones and weak machines, and an FPS monitor lowers it automatically if frame rate stays poor.
+The game starts its default race as soon as the physics engine (WebAssembly) and car model are ready. Main-menu return buttons are removed from the HUD, pause screen, and results screen. Quality starts at Low on phones and weak machines, and an FPS monitor lowers it automatically if frame rate stays poor.
 
 ## Tests
 

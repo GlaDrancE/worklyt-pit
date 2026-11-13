@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { TrackModel } from "../src/track/TrackModel";
 import { TRACKS, getTrack } from "../src/track/tracks";
 import { NO_CONTEXT, RivalField, speedProfile, paceFor, rankField } from "../src/race/Rivals";
+import { WORKLYFT } from "../src/race/companies";
 
 function lapTime(trackIdx: number, difficulty: "easy" | "medium" | "hard"): number {
   const model = new TrackModel(TRACKS[trackIdx]!);
@@ -53,6 +54,15 @@ describe("rival cars", () => {
       for (let j = i + 1; j < field.rivals.length; j++)
         expect(Math.hypot(field.rivals[i]!.x - field.rivals[j]!.x, field.rivals[i]!.z - field.rivals[j]!.z)).toBeGreaterThan(5);
     expect(new Set(field.rivals.map((r) => r.name)).size).toBe(5);
+  });
+
+  it("puts the Worklyft car first and keeps the player's company out of the rival roster", () => {
+    const model = new TrackModel(TRACKS[0]!);
+    const field = new RivalField(model, 5, "medium", 3, 10, null, [], "Google");
+    const names = field.rivals.map((r) => r.name);
+    expect(names[0]).toBe(WORKLYFT);
+    expect(names).not.toContain("Google");
+    expect(new Set(names).size).toBe(names.length);
   });
 
   it("is deterministic for a seed", () => {

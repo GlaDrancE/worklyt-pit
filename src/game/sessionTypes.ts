@@ -68,6 +68,9 @@ export interface Session {
   saved: boolean;
   newBest: boolean;
   versus: VersusSession | null;
+  onlineRoomId: string | null;
+  onlinePlayers: Map<string, VersusSession>;
+  lastOnlineSend: number;
   rivals: RivalSession | null;
   /** Sim time (ms) when the lights went out. */
   goMs: number | null;

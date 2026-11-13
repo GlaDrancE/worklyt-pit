@@ -1,12 +1,12 @@
 # Gameplay guide
 
-## Menu modes
+## Joining a race
 
-The start menu has three tabs. Each has the same circuit, time of day, weather, engine sound, tyre and graphics options.
+Opening the game starts directly on the default circuit with the saved number and difficulty of rivals. The HUD, pause screen, and results screen no longer offer a way back to the main menu; use **Restart session** or **Race again** to keep playing. The game connects to its configured multiplayer relay automatically when available.
 
 | Tab | What it does |
 | --- | --- |
-| **Battle** | Race 1, 3 or 5 rivals at easy, medium or hard. Damage, safety car and pit stops all count. |
+| **Battle** | Race 1, 2 or 5 rivals at easy, medium or hard. Damage, safety car and pit stops all count. |
 | **Solo drive** | Just you, either timed laps or free roam with no timing. Race or drift handling, and damage options, are here. |
 | **1 vs 1** | Opens the online lobby, see [multiplayer.md](multiplayer.md). Time of day and weather are shared by both drivers. Online always uses race handling and no crash damage. |
 
@@ -70,11 +70,11 @@ Open "Daily challenge · Season · Unlocks" on the menu.
 
 ## Driver names, history and achievements
 
-On first launch the game gives you a driver name such as "Swift Falcon 42" and a driver ID. You can rename yourself on the menu. Every Circuit Racing session is saved on your device with the circuit, date, every lap and sector, top speed and barrier hits, marked as finished or left early. **Race history** shows your races, the fastest laps per circuit and, if you like, everyone who has raced on the same device.
+Drivers are assigned company names from a pool of 70. Small fields favor popular companies, and every race with rivals includes a distinctive blue-and-black Worklyft car. Existing personal driver names migrate to a company name. Every session is saved on your device with the circuit, date, every lap and sector, top speed and barrier hits, marked as finished or left early. **Race history** shows your races, the fastest laps per circuit and, if you like, everyone who has raced on the same device.
 
 Thirteen achievements unlock as you play. After a race, **Share result card** makes a 1200×630 picture (circuit, conditions, best lap, top speed, drift, hits). It uses the system share sheet where there is one, otherwise press and hold the picture or use Download PNG. Nothing is uploaded.
 
-A short "how to drive" card appears before your first race, and **How to play** on the menu shows it again.
+A short "how to drive" card appears before your first race.
 
 ## Telemetry
 

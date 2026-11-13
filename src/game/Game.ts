@@ -40,7 +40,7 @@ import { HUD, formatTime } from "../ui/HUD";
 import { EngineSound } from "../audio/EngineSound";
 import type { EngineId } from "../audio/engineProfiles";
 import { addRecord, buildRecord, updateRecord, type DriverProfile } from "../race/history";
-import type { PlayerInfo, PlayerState, Standing } from "../net/protocol";
+import type { LiveRacer, PlayerInfo, PlayerState, Standing } from "../net/protocol";
 import type { Confetti } from "../ui/Confetti";
 import type { RankRow } from "../ui/HUD";
 import { GhostPlayer, GhostRecorder, loadGhost, saveGhost } from "../race/ghost";
@@ -111,7 +111,7 @@ export class Game {
   private lastWasVersus = false;
 
   get isVersus(): boolean {
-    return !!this.session?.versus;
+    return !!this.session?.onlineRoomId || !!this.session?.versus;
   }
 
   get lastRaceWasVersus(): boolean {
@@ -328,6 +328,9 @@ export class Game {
       saved: false,
       newBest: false,
       versus: null,
+      onlineRoomId: null,
+      onlinePlayers: new Map(),
+      lastOnlineSend: 0,
       rivals: null,
       goMs: null,
       ghostRec: new GhostRecorder(),
@@ -378,7 +381,7 @@ export class Game {
         groups.push(rivalMeshes);
         pitSpot = { dist: Math.round((100 - RIVAL_BOX_OFFSET_M) / 2) * (model.length / model.count), lateral: model.nearest(rb.x, rb.z).lateral };
       }
-      const field = new RivalField(model, rivalOpts.count, rivalOpts.difficulty, def.laps, Date.now() % 100000, pitSpot, rivalOpts.names ?? []);
+      const field = new RivalField(model, rivalOpts.count, rivalOpts.difficulty, def.laps, Date.now() % 100000, pitSpot, rivalOpts.names ?? [], this.driver.name);
       const views: CarView[] = [];
       const labels: THREE.Sprite[] = [];
       field.rivals.forEach((r, i) => {
@@ -416,23 +419,8 @@ export class Game {
     });
     groups.push(s.dm.root);
     if (versus) {
-      const theirs = gridPose(model, versus.slot === 0 ? 1 : 0);
-      const ghost = new CarView(opponentLivery(versus.opponent.colour, this.playerLivery));
-      const label = makeLabel(versus.opponent.name);
-      this.scene.add(ghost.root, label);
-      groups.push(ghost.root as THREE.Group, label as unknown as THREE.Group);
-      s.versus = {
-        opponent: versus.opponent,
-        slot: versus.slot,
-        ghost,
-        label,
-        target: null,
-        pos: new THREE.Vector3(theirs.x, 0.65, theirs.z),
-        quat: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, theirs.yaw, 0)),
-        oppFinishedMs: null,
-        myFinishedMs: null,
-        lastSend: 0,
-      };
+      s.onlineRoomId = "invite";
+      this.attachOnlinePlayer(s, versus.opponent, null, versus.slot);
     }
     if (mode === "race" && !versus) {
       const saved = loadGhost(s.recordKey);
@@ -491,6 +479,96 @@ export class Game {
     if (this.lastConfig) this.start(this.lastConfig.trackId, this.lastConfig.mode, undefined, this.lastConfig.rivals);
   }
 
+  /** Add a matched online driver to the current session without restarting the race. */
+  joinOnlineRace(trackId: string, versus: VersusInit): boolean {
+    const s = this.session;
+    if (
+      !s ||
+      this.phase !== "playing" ||
+      s.mode !== "race" ||
+      s.trackId !== trackId ||
+      s.onlineRoomId ||
+      (versus.conditions && (s.conditions.time !== versus.conditions.time || s.conditions.weather !== versus.conditions.weather))
+    ) return false;
+    s.onlineRoomId = "invite";
+    this.attachOnlinePlayer(s, versus.opponent, null, versus.slot);
+    if (s.ghostView) s.ghostView.root.visible = false;
+    this.lastWasVersus = true;
+    return true;
+  }
+
+  joinOnlineRoom(trackId: string, roomId: string, racers: readonly LiveRacer[], selfId: string, conditions?: Conditions): boolean {
+    const s = this.session;
+    if (
+      !s ||
+      this.phase !== "playing" ||
+      s.mode !== "race" ||
+      s.trackId !== trackId ||
+      (s.onlineRoomId && s.onlineRoomId !== roomId) ||
+      (conditions && (s.conditions.time !== conditions.time || s.conditions.weather !== conditions.weather))
+    ) return false;
+    s.onlineRoomId = roomId;
+    racers.forEach((r, i) => {
+      if (r.id !== selfId) this.attachOnlinePlayer(s, r, r.state, i % 2 as 0 | 1);
+    });
+    s.versus = s.onlinePlayers.values().next().value ?? null;
+    if (s.ghostView) s.ghostView.root.visible = false;
+    this.lastWasVersus = true;
+    this.hud.setResultsButtons(true);
+    this.hud.toast(`Online race · ${racers.length} drivers`, 2500);
+    return true;
+  }
+
+  addOnlinePlayer(roomId: string, player: PlayerInfo): void {
+    const s = this.session;
+    if (!s || s.onlineRoomId !== roomId || player.id === this.driver.id) return;
+    this.attachOnlinePlayer(s, { ...player, state: null, totalMs: null }, null, s.onlinePlayers.size % 2 as 0 | 1);
+    s.versus ??= s.onlinePlayers.get(player.id) ?? null;
+  }
+
+  removeOnlinePlayer(roomId: string, id: string, name: string): void {
+    const s = this.session;
+    if (!s || s.onlineRoomId !== roomId) return;
+    const racer = s.onlinePlayers.get(id);
+    if (!racer) return;
+    this.scene.remove(racer.ghost.root, racer.label);
+    s.onlinePlayers.delete(id);
+    if (s.versus === racer) s.versus = s.onlinePlayers.values().next().value ?? null;
+    this.hud.toast(`${name} left the race`, 3500);
+  }
+
+  private attachOnlinePlayer(s: Session, player: LiveRacer | PlayerInfo, state: PlayerState | null, slot: 0 | 1): void {
+    const opponent: PlayerInfo = { id: player.id, name: player.name, ...(player.colour ? { colour: player.colour } : {}) };
+    const old = s.onlinePlayers.get(opponent.id);
+    if (old) {
+      if (state) old.target = state;
+      return;
+    }
+    const theirs = gridPose(s.model, slot === 0 ? 1 : 0);
+    const ghost = new CarView(opponentLivery(opponent.colour, this.playerLivery));
+    const label = makeLabel(opponent.name);
+    this.scene.add(ghost.root, label);
+    s.groups.push(ghost.root as THREE.Group, label as unknown as THREE.Group);
+    const racer: VersusSession = {
+      opponent,
+      slot,
+      ghost,
+      label,
+      target: state,
+      pos: new THREE.Vector3(theirs.x, 0.65, theirs.z),
+      quat: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, theirs.yaw, 0)),
+      oppFinishedMs: "totalMs" in player ? player.totalMs : null,
+      myFinishedMs: null,
+      lastSend: 0,
+    };
+    if (state) {
+      racer.pos.set(state.x, state.y, state.z);
+      racer.quat.set(state.qx, state.qy, state.qz, state.qw);
+    }
+    s.onlinePlayers.set(opponent.id, racer);
+    s.versus ??= racer;
+  }
+
   toMenu(): void {
     this.endSession();
     this.replayer.reset();
@@ -505,8 +583,8 @@ export class Game {
   }
 
   pause(): void {
-    if (this.session?.versus) {
-      this.hud.toast("You can't pause a 1v1 race", 1500);
+    if (this.session && this.isNetworked(this.session)) {
+      this.hud.toast("You can't pause an online race", 1500);
       return;
     }
     if (this.phase === "playing") {
@@ -592,7 +670,7 @@ export class Game {
       const snap = s.car.snapshot();
       if (!s.dm.carried) s.carView.sync(snap, s.car, dt);
       s.carView.setBraking(s.lastInput.brake > 0 && snap.forwardSpeed > 1);
-      if (s.versus) this.updateGhost(s.versus, dt);
+      for (const racer of s.onlinePlayers.values()) this.updateGhost(racer, dt);
       if (s.rivals) this.updateRivalViews(s.rivals, dt);
       s.dm.frame(dt, now, snap);
       if (s.ghostPlayer && s.ghostView && s.race && !this.replayer.active) this.updateBestGhost(s, dt);
@@ -619,7 +697,9 @@ export class Game {
         const others: Array<{ x: number; z: number; speedKmh: number }> = s.rivals
           ? s.rivals.field.rivals.map((r) => ({ x: r.x, z: r.z, speedKmh: r.speedKmh }))
           : [];
-        if (s.versus?.target) others.push({ x: s.versus.pos.x, z: s.versus.pos.z, speedKmh: s.versus.target.speedKmh });
+        for (const racer of s.onlinePlayers.values()) {
+          if (racer.target) others.push({ x: racer.pos.x, z: racer.pos.z, speedKmh: racer.target.speedKmh });
+        }
         if (others.length > 0) this.sound.updateOthers(dt, { x: snap.x, z: snap.z, yaw: snap.yaw }, others);
       }
       s.lampLights?.update(snap.x, snap.z);
@@ -629,7 +709,7 @@ export class Game {
       const dots: Array<{ x: number; z: number; color: string }> = s.rivals
         ? s.rivals.field.rivals.map((r) => ({ x: r.x, z: r.z, color: "#ffd21f" }))
         : [];
-      if (s.versus) dots.push({ x: s.versus.pos.x, z: s.versus.pos.z, color: "#1d6fd8" });
+      for (const racer of s.onlinePlayers.values()) dots.push({ x: racer.pos.x, z: racer.pos.z, color: "#1d6fd8" });
       s.minimap.draw(snap.x, snap.z, snap.yaw, dots);
     }
 
@@ -721,7 +801,7 @@ export class Game {
         this.hud.toast("Tyres wearing: a pit stop will bring the grip back", 3000);
       }
     }
-    if (!s.versus && canDrive) {
+    if (!this.isNetworked(s) && canDrive) {
       s.slip = s.car.slipAngle();
       const crashed = s.collisions !== s.lastCrashCount || snap.upY < 0.5;
       s.lastCrashCount = s.collisions;
@@ -750,8 +830,8 @@ export class Game {
       }
     }
 
-    if (s.versus && s.simMs - s.versus.lastSend >= STATE_SEND_MS) {
-      s.versus.lastSend = s.simMs;
+    if (this.isNetworked(s) && s.simMs - s.lastOnlineSend >= STATE_SEND_MS) {
+      s.lastOnlineSend = s.simMs;
       this.onSendState?.({
         x: snap.x,
         y: snap.y,
@@ -797,13 +877,13 @@ export class Game {
 
   /** Unlock any achievements the race has earned so far (or in full, when `completed`). */
   private checkAchievements(s: Session, completed: boolean, position: number | null, fieldSize: number): void {
-    if (s.versus && !completed) return;
+    if (this.isNetworked(s) && !completed) return;
     const unlocked = loadUnlocked();
     const racesBefore = Number(loadSetting("races-done", "0")) || 0;
     const stats: RaceStats = {
       trackId: s.trackId,
       completed,
-      versus: !!s.versus,
+      versus: this.isNetworked(s),
       collisions: s.collisions,
       topSpeedKmh: s.topSpeedKmh,
       driftTotal: s.drift.total,
@@ -901,7 +981,7 @@ export class Game {
 
   private showDriftResult(s: Session): void {
     s.drift.finish();
-    if (s.versus || s.drift.total <= 0) {
+    if (this.isNetworked(s) || s.drift.total <= 0) {
       this.hud.setDriftResult(null);
       return;
     }
@@ -1020,9 +1100,10 @@ export class Game {
         this.hud.setGhost(null);
         const total = e.laps.reduce((a, l) => a + l.ms, 0);
         const validLaps = e.laps.filter((l) => l.valid).length;
-        const solo = !s.versus;
+        const networked = this.isNetworked(s);
+        const solo = !networked;
         let standings: Standing[] | null = null;
-        if (s.rivals) standings = this.fieldStandings(s, s.simMs - (s.goMs ?? 0) + s.dm.penaltyMs);
+        if (s.rivals && !networked) standings = this.fieldStandings(s, s.simMs - (s.goMs ?? 0) + s.dm.penaltyMs);
         const mine = standings?.find((x) => x.id === this.driver.id);
         const points = mine ? mine.points : solo ? validLaps * 10 + (s.newBest ? 10 : 0) : undefined;
         this.saveRace(s, true, points, mine ? { position: mine.place, fieldSize: standings!.length } : undefined);
@@ -1044,10 +1125,10 @@ export class Game {
         } else if (solo) {
           this.hud.setPoints(`Points earned: +${points ?? 0}  (10 per valid lap${s.newBest ? ", +10 personal best" : ""})`);
           this.confetti?.celebrate(s.newBest);
-        } else if (s.versus) {
-          s.versus.myFinishedMs = total;
+        } else if (networked) {
+          if (s.versus) s.versus.myFinishedMs = total;
           this.hud.setVersus(null);
-          this.hud.showVersusWaiting(s.versus.opponent.name);
+          this.hud.showVersusWaiting(s.versus?.opponent.name ?? "other racers");
           this.onFinish?.(total);
         }
         break;
@@ -1064,14 +1145,16 @@ export class Game {
       this.hud.setLap(Math.min(s.race.lapNumber, s.model.def.laps), s.model.def.laps);
       const laps = s.model.def.laps;
       const left = Math.max(0, laps - Math.min(s.race.lapNumber, laps));
-      if (s.rivals) {
+      if (s.rivals || this.isNetworked(s)) {
         const sn = s.car.snapshot();
         const L = s.model.length;
-        let p = this.progressOf(s, sn.x, sn.z);
-        if (s.race.lapNumber === 1 && p > 0.9) p -= 1;
-        const mine = (s.race.lapNumber - 1) * L + p * L;
-        const ahead = s.rivals.field.rivals.filter((c) => c.status !== "gone" && c.dist > mine).length;
-        this.hud.setPosition(ahead + 1, s.rivals.field.rivals.length + 1, left);
+        const mine = this.progressOf(s, sn.x, sn.z);
+        const others = [
+          ...(s.rivals?.field.rivals.filter((r) => r.status !== "gone").map((r) => r.dist / L) ?? []),
+          ...[...s.onlinePlayers.values()].flatMap((r) => r.target ? [r.target.progress] : []),
+        ];
+        const ahead = others.filter((progress) => progress > mine).length;
+        this.hud.setPosition(ahead + 1, others.length + 1, left);
       } else this.hud.setPosition(null, 1, left);
     }
     this.hud.setTyres(s.tyres ? { name: s.tyres.compound.name, color: s.tyres.compound.color, lifePercent: s.tyres.lifePercent } : null);
@@ -1093,10 +1176,13 @@ export class Game {
       const d = s.ghostPlayer.deltaMs(s.race.currentLapMs(s.simMs), frac);
       this.hud.setGhost(d === null ? null : `${d <= 0 ? "−" : "+"}${(Math.abs(d) / 1000).toFixed(2)} s vs your best`, d === null ? "" : d <= 0 ? "ahead" : "behind");
     }
-    if (s.rivals && this.phase === "playing") {
+    if ((s.rivals || this.isNetworked(s)) && this.phase === "playing") {
       const me = s.car.snapshot();
       const mine = this.progressOf(s, me.x, me.z);
-      const others = s.rivals.field.rivals.map((r) => r.dist / s.model.length);
+      const others = [
+        ...(s.rivals?.field.rivals.filter((r) => r.status !== "gone").map((r) => r.dist / s.model.length) ?? []),
+        ...[...s.onlinePlayers.values()].flatMap((r) => r.target ? [r.target.progress] : []),
+      ];
       const ahead = others.filter((p) => p > mine).sort((a, b) => a - b);
       const place = ahead.length + 1;
       const total = others.length + 1;
@@ -1104,18 +1190,10 @@ export class Game {
       const tail = ahead.length ? ` · ${gapAhead} m to P${place - 1}` : " · leading";
       this.hud.setVersus(`P${place} / ${total}${tail}`, place === 1 ? "ahead" : "");
     }
-    if (s.versus && this.phase === "playing") {
-      const v = s.versus;
-      if (!v.target) {
-        this.hud.setVersus(`vs ${v.opponent.name} · waiting for their car…`);
-      } else {
-        const mine = this.progressOf(s, s.car.snapshot().x, s.car.snapshot().z);
-        const gap = Math.round((mine - v.target.progress) * s.model.length);
-        const ahead = gap >= 0;
-        const tail = v.oppFinishedMs !== null ? ` · ${v.opponent.name} has finished!` : "";
-        this.hud.setVersus(`${ahead ? "P1" : "P2"} · ${ahead ? "+" : "−"}${Math.abs(gap)} m vs ${v.opponent.name}${tail}`, ahead ? "ahead" : "behind");
-      }
-    }
+  }
+
+  private isNetworked(s: Session): boolean {
+    return !!s.onlineRoomId || !!s.versus;
   }
 
   /** Laps completed plus the fraction of the current lap, so two cars can be compared. */
@@ -1180,11 +1258,24 @@ export class Game {
   }
 
   /** Online hooks called by main.ts when the relay delivers something. */
-  receiveOpponent(state: PlayerState): void {
-    const v = this.session?.versus;
+  receiveOpponent(state: PlayerState, id?: string): void {
+    const s = this.session;
+    const v = id ? s?.onlinePlayers.get(id) : s?.versus;
     if (!v) return;
     if (!v.target) v.pos.set(state.x, state.y, state.z);
     v.target = state;
+  }
+
+  onlinePlayerFinished(roomId: string, id: string, name: string, totalMs: number): void {
+    const s = this.session;
+    if (!s || s.onlineRoomId !== roomId) return;
+    const racer = s.onlinePlayers.get(id);
+    if (racer) racer.oppFinishedMs = totalMs;
+    this.hud.toast(`${name} finished · ${formatTime(totalMs)}`, 3000);
+  }
+
+  onlinePlayerLeft(roomId: string, id: string, name: string): void {
+    this.removeOnlinePlayer(roomId, id, name);
   }
 
   opponentFinished(name: string, totalMs: number): void {
@@ -1201,7 +1292,7 @@ export class Game {
   /** Final standings from the relay: show the table, points and the celebration. */
   applyResult(standings: Standing[], forfeit: boolean): void {
     const s = this.session;
-    if (!s?.versus) return;
+    if (!s || !this.isNetworked(s)) return;
     if (this.phase === "playing" || this.phase === "paused") {
       // Opponent quit: the race is over for us too.
       this.phase = "finished";
@@ -1214,7 +1305,7 @@ export class Game {
     this.hud.setVersus(null);
     this.hud.showVersusResult(standings, this.driver.id, forfeit);
     if (me) {
-      this.hud.setPoints(`Points earned: +${me.points}  (${me.place === 1 ? "1st" : "2nd"} place)`);
+      this.hud.setPoints(`Points earned: +${me.points}  (P${me.place} of ${standings.length})`);
       if (this.lastVersusRecord) {
         updateRecord(this.lastVersusRecord.id, {
           points: me.points,

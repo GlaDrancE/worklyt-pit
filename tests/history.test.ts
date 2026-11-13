@@ -13,6 +13,7 @@ import {
   updateRecord,
   type StorageLike,
 } from "../src/race/history";
+import { COMPANY_NAMES, POPULAR_COMPANIES, WORKLYFT } from "../src/race/companies";
 
 function memory(): StorageLike & { data: Map<string, string> } {
   const data = new Map<string, string>();
@@ -36,12 +37,24 @@ function rec(driverName: string, driverId: string, trackId: string, laps: Return
 }
 
 describe("driver profile", () => {
-  it("creates a specific name on first visit and keeps it afterwards", () => {
+  it("assigns and keeps a company name on first visit", () => {
     const store = memory();
     const a = loadProfile(store);
-    expect(a.name).toMatch(/^[A-Z][a-z]+ [A-Z][a-z]+ \d{2}$/);
+    expect(COMPANY_NAMES).toContain(a.name);
+    expect(a.name).not.toBe(WORKLYFT);
     const b = loadProfile(store);
     expect(b).toEqual(a);
+  });
+
+  it("migrates existing personal and Worklyft profiles to a popular company", () => {
+    const store = memory();
+    for (const oldName of ["Alex Racer", WORKLYFT]) {
+      store.setItem("trackrush.profile", JSON.stringify({ id: "player-id", name: oldName }));
+      const profile = loadProfile(store, () => 0.5, 6);
+      expect(POPULAR_COMPANIES).toContain(profile.name);
+      expect(profile.name).not.toBe(WORKLYFT);
+      expect(JSON.parse(store.getItem("trackrush.profile")!).name).toBe(profile.name);
+    }
   });
 
   it("generates different names and cleans user input", () => {
@@ -54,7 +67,7 @@ describe("driver profile", () => {
   it("recovers from a corrupted profile", () => {
     const store = memory();
     store.setItem("trackrush.profile", "{not json");
-    expect(loadProfile(store).name.length).toBeGreaterThan(3);
+    expect(COMPANY_NAMES).toContain(loadProfile(store).name);
   });
 });
 

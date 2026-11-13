@@ -94,7 +94,7 @@
           <h3 class="sec" data-for="battle solo">Opponents</h3>
           <label data-for="battle">Rival cars
             <select id="rivals-select">
-              <option value="3">3 rivals</option>
+              <option value="2">2 rivals</option>
               <option value="5">5 rivals</option>
               <option value="1">1 rival</option>
             </select>
@@ -185,7 +185,6 @@
         <button id="btn-pause">Pause</button>
         <button id="btn-export">CSV</button>
         <button id="btn-export-json">JSON</button>
-        <button id="btn-menu">Menu</button>
       </div>
     </div>
 
@@ -207,7 +206,6 @@
         <h1>PAUSED</h1>
         <button id="resume-btn">Resume</button>
         <button id="restart-btn" class="secondary">Restart session</button>
-        <button id="pause-menu-btn" class="secondary">Main menu</button>
       </div>
     </div>
 
@@ -224,7 +222,6 @@
         <button id="results-replay" class="secondary hidden">Watch best lap</button>
         <button id="results-share" class="secondary">Share result card</button>
         <button id="results-export" class="secondary">Export telemetry (CSV)</button>
-        <button id="results-menu" class="secondary">Main menu</button>
       </div>
     </div>
 
@@ -377,7 +374,7 @@
         </label>
         <p class="sub">Pick it before you connect or search. Your opponent sees this colour on your car.</p>
         <div id="mp-actions" class="hidden">
-          <p class="sub">Race track: <strong id="mp-track"></strong> (change it on the main menu)</p>
+          <p class="sub">Race track: <strong id="mp-track"></strong></p>
           <label>Friend's driver ID
             <input id="mp-friend" type="text" maxlength="16" autocomplete="off" spellcheck="false" />
           </label>

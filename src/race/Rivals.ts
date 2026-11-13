@@ -1,7 +1,7 @@
 import type { TrackModel } from "../track/TrackModel";
-import { generateDriverName } from "./history";
 import { CarDamage, type Zone } from "../vehicle/damage";
 import { toCarFrame } from "./contact";
+import { COMPANY_NAMES, isCompanyName, rivalCompanyNames, WORKLYFT } from "./companies";
 
 export type Difficulty = "easy" | "medium" | "hard";
 
@@ -181,6 +181,7 @@ export class RivalField {
     seed = 1,
     private readonly pit: PitSpot | null = null,
     names: readonly string[] = [],
+    playerName = "",
   ) {
     let a = seed >>> 0;
     const rand = () => {
@@ -194,10 +195,19 @@ export class RivalField {
     const grip = paceFor(difficulty);
     this.profile = speedProfile(model, grip);
     this.total = laps * model.length;
-    const used = new Set<string>();
+    const generatedNames = rivalCompanyNames(count, rand, count + 2, playerName ? [playerName] : []);
+    const used = new Set<string>(playerName ? [playerName] : []);
     for (let i = 0; i < count; i++) {
-      let name = names[i] ?? generateDriverName(rand);
-      while (used.has(name)) name = generateDriverName(rand);
+      const requested = names[i];
+      let name =
+        i === 0
+          ? WORKLYFT
+          : requested && isCompanyName(requested) && requested !== WORKLYFT && !used.has(requested)
+            ? requested
+            : generatedNames[i] ?? `${COMPANY_NAMES[i % COMPANY_NAMES.length]} ${i + 1}`;
+      if (used.has(name)) {
+        name = generatedNames.find((candidate) => !used.has(candidate)) ?? `${COMPANY_NAMES[i % COMPANY_NAMES.length]} ${i + 1}`;
+      }
       used.add(name);
       const g = gridSlot(i);
       const state: RivalState = {

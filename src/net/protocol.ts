@@ -37,6 +37,19 @@ export interface BoardEntry {
   bestMs: number;
 }
 
+export interface LiveRacer extends PlayerInfo {
+  state: PlayerState | null;
+  totalMs: number | null;
+}
+
+export interface LiveRoom {
+  id: string;
+  trackId: string;
+  startedAt: number;
+  maxPlayers: number;
+  racers: LiveRacer[];
+}
+
 export type ClientMsg =
   | { t: "hello"; id: string; name: string; colour?: string; token?: string }
   | { t: "colour"; colour: string }
@@ -48,7 +61,8 @@ export type ClientMsg =
   | { t: "state"; s: PlayerState }
   | { t: "finish"; totalMs: number }
   | { t: "submitLap"; trackId: string; ms: number }
-  | { t: "board"; trackId: string };
+  | { t: "board"; trackId: string }
+  | { t: "watch" };
 
 export type ServerMsg =
   | { t: "welcome"; online: number }
@@ -57,9 +71,14 @@ export type ServerMsg =
   | { t: "inviteDeclined"; by: string }
   | { t: "queued" }
   | { t: "match"; room: string; trackId: string; slot: 0 | 1; opponent: PlayerInfo }
+  | { t: "roomJoined"; room: LiveRoom; selfId: string }
+  | { t: "playerJoined"; roomId: string; player: PlayerInfo }
+  | { t: "playerLeft"; roomId: string; id: string; name: string }
+  | { t: "playerFinished"; roomId: string; id: string; name: string; totalMs: number }
+  | { t: "watchSnapshot"; rooms: LiveRoom[] }
   | { t: "start" }
-  | { t: "opp"; s: PlayerState }
-  | { t: "oppFinished"; name: string; totalMs: number }
+  | { t: "opp"; id?: string; s: PlayerState }
+  | { t: "oppFinished"; id?: string; name: string; totalMs: number }
   | { t: "oppLeft"; name: string }
   | { t: "result"; standings: Standing[]; forfeit: boolean }
   | { t: "board"; trackId: string; entries: BoardEntry[] };
@@ -67,7 +86,7 @@ export type ServerMsg =
 export const COLOUR_PATTERN = /^[a-z0-9-]{1,24}$/;
 export const ID_PATTERN = /^[A-Za-z0-9]{4,16}$/;
 export const MAX_NAME = 20;
-export const POINTS_BY_PLACE = [25, 18] as const;
+export const POINTS_BY_PLACE = [25, 18, 15, 12, 10, 8] as const;
 
 const num = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 const str = (v: unknown, max = 64): v is string => typeof v === "string" && v.length > 0 && v.length <= max;
@@ -129,6 +148,8 @@ export function parseClientMessage(raw: string): ClientMsg | null {
       return str(m.trackId, 40) && num(m.ms) && m.ms >= 5000 && m.ms <= 1_000_000 ? { t: "submitLap", trackId: m.trackId, ms: Math.round(m.ms) } : null;
     case "board":
       return str(m.trackId, 40) ? { t: "board", trackId: m.trackId } : null;
+    case "watch":
+      return { t: "watch" };
     default:
       return null;
   }

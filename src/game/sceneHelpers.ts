@@ -2,10 +2,12 @@ import * as THREE from "three";
 import type { Pose, TrackModel } from "../track/TrackModel";
 import { gridSlot } from "../race/Rivals";
 import type { Livery } from "../vehicle/CarView";
+import { WORKLYFT_LIVERY } from "../race/companies";
 
 /** Small scene helpers used by the game: liveries, car fading, grid positions, name labels, clean-up. */
 
 export const RIVAL_LIVERIES: Livery[] = [
+  WORKLYFT_LIVERY,
   { body: 0x1d6fd8, accent: 0xffffff, helmet: 0xffd21f, compound: 0xf4f4f2, pod: 0xff4fd8 },
   { body: 0xf2b705, accent: 0x111111, helmet: 0xffffff, compound: 0xf4f4f2, pod: 0x1d6fd8 },
   { body: 0x1faa59, accent: 0xffffff, helmet: 0x111111, compound: 0xf4f4f2, pod: 0xffd21f },
@@ -89,7 +91,7 @@ export function disposeObject(root: THREE.Object3D): void {
     if (!mat) return;
     for (const m of Array.isArray(mat) ? mat : [mat]) {
       const std = m as THREE.MeshStandardMaterial;
-      std.map?.dispose();
+      if (std.map && !std.map.userData.shared) std.map.dispose();
       m.dispose();
     }
   });

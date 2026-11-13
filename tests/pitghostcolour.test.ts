@@ -74,9 +74,9 @@ describe("colour over the relay", () => {
     l.handle(b.conn, { t: "colour", colour: "forest" });
     l.handle(a.conn, { t: "quick", trackId: "apex-park" });
     l.handle(b.conn, { t: "quick", trackId: "apex-park" });
-    const ma = a.got.find((m) => m.t === "match");
-    const mb = b.got.find((m) => m.t === "match");
-    expect(ma && ma.t === "match" && ma.opponent.colour).toBe("forest");
-    expect(mb && mb.t === "match" && mb.opponent.colour).toBe("papaya");
+    const ma = a.got.find((m) => m.t === "playerJoined");
+    const mb = b.got.find((m) => m.t === "roomJoined");
+    expect(ma && ma.t === "playerJoined" && ma.player.colour).toBe("forest");
+    expect(mb && mb.t === "roomJoined" && mb.room.racers.find((r) => r.id === "aaaa1111")?.colour).toBe("papaya");
   });
 });

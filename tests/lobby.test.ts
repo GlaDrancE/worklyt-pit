@@ -62,8 +62,8 @@ describe("lobby: invites by driver ID", () => {
   });
 });
 
-describe("lobby: strangers", () => {
-  it("pairs two players in the quick-match queue", () => {
+describe("lobby: open race rooms", () => {
+  it("joins racers to the same live room only when circuit and conditions match", () => {
     const l = new Lobby();
     const a = client();
     const b = client();
@@ -71,23 +71,75 @@ describe("lobby: strangers", () => {
     hello(l, a, "aaaa1111", "Ann");
     hello(l, b, "bbbb2222", "Ben");
     hello(l, c, "cccc3333", "Cy");
-    l.handle(a.conn, { t: "quick", trackId: "apex-park" });
-    expect(a.last("queued")).toBeTruthy();
-    l.handle(b.conn, { t: "quick", trackId: "harbour-loop" });
-    expect(a.last("match")).toMatchObject({ trackId: "apex-park", opponent: { name: "Ben" } });
-    expect(b.last("match")).toMatchObject({ trackId: "apex-park" });
-    l.handle(c.conn, { t: "quick", trackId: "harbour-loop" });
-    expect(c.last("queued")).toBeTruthy();
-    expect(c.last("match")).toBeUndefined();
+    const apex = "apex-park|day|clear";
+    l.handle(a.conn, { t: "quick", trackId: apex });
+    const first = a.last("roomJoined");
+    if (first?.t !== "roomJoined") throw new Error("first racer did not join a room");
+    l.handle(b.conn, { t: "quick", trackId: "harbour-loop|day|clear" });
+    const otherTrack = b.last("roomJoined");
+    if (otherTrack?.t !== "roomJoined") throw new Error("second racer did not join a room");
+    l.handle(c.conn, { t: "quick", trackId: apex });
+    const third = c.last("roomJoined");
+    if (third?.t !== "roomJoined") throw new Error("third racer did not join a room");
+    expect(first.room.id).toBe(third.room.id);
+    expect(otherTrack.room.id).not.toBe(first.room.id);
+    expect(third.room.racers.map((r) => r.name)).toEqual(["Ann", "Cy"]);
+    expect(a.last("playerJoined")).toMatchObject({ roomId: first.room.id, player: { name: "Cy" } });
   });
 
-  it("never matches a player with themselves", () => {
+  it("rejects joining the same live room twice with one driver ID", () => {
     const l = new Lobby();
     const a = client();
     hello(l, a, "aaaa1111", "Ann");
     l.handle(a.conn, { t: "quick", trackId: "t" });
     l.handle(a.conn, { t: "quick", trackId: "t" });
-    expect(a.last("match")).toBeUndefined();
+    expect(a.last("error")).toBeTruthy();
+  });
+
+  it("enforces the configured room limit and ranks up to that limit", () => {
+    const l = new Lobby({ maxPlayers: 3 });
+    const racers = [client(), client(), client(), client()];
+    racers.forEach((c, i) => hello(l, c, `player${i}1`, `Driver ${i + 1}`));
+    racers.slice(0, 3).forEach((c) => l.handle(c.conn, { t: "quick", trackId: "t|day|clear" }));
+    const room = racers[0]!.last("roomJoined");
+    if (room?.t !== "roomJoined") throw new Error("room did not start");
+    const fullRoom = racers[2]!.last("roomJoined");
+    if (fullRoom?.t !== "roomJoined") throw new Error("third racer did not join");
+    expect(fullRoom.room.racers).toHaveLength(3);
+    expect(fullRoom.room.racers.map((r) => r.name)).toContain("Driver 3");
+    l.handle(racers[3]!.conn, { t: "quick", trackId: "t|day|clear" });
+    expect(racers[3]!.last("error")).toMatchObject({ t: "error", msg: "This race is full (3 drivers)." });
+
+    l.handle(racers[0]!.conn, { t: "finish", totalMs: 120_000 });
+    l.handle(racers[1]!.conn, { t: "finish", totalMs: 118_000 });
+    l.handle(racers[2]!.conn, { t: "finish", totalMs: 125_000 });
+    const result = racers[0]!.last("result");
+    if (result?.t !== "result") throw new Error("no multi-player result");
+    expect(result.standings.map((standing) => [standing.name, standing.place, standing.points])).toEqual([
+      ["Driver 2", 1, 25],
+      ["Driver 1", 2, 18],
+      ["Driver 3", 3, 15],
+    ]);
+  });
+
+  it("provides public live snapshots and broadcasts every racer's state", () => {
+    const timers: Array<() => void> = [];
+    const l = new Lobby({ setTimer: (fn) => { timers.push(fn); return timers.length; }, clearTimer: () => {} });
+    const a = client();
+    const b = client();
+    const watcher = client();
+    hello(l, a, "aaaa1111", "Ann");
+    hello(l, b, "bbbb2222", "Ben");
+    l.handle(watcher.conn, { t: "watch" });
+    expect(watcher.last("watchSnapshot")).toMatchObject({ t: "watchSnapshot", rooms: [] });
+    l.handle(a.conn, { t: "quick", trackId: "t|day|clear" });
+    l.handle(b.conn, { t: "quick", trackId: "t|day|clear" });
+    l.handle(a.conn, { t: "state", s: state(0.5) });
+    expect(b.last("opp")).toMatchObject({ id: "aaaa1111", s: { progress: 0.5 } });
+    timers.forEach((flush) => flush());
+    const snapshot = watcher.last("watchSnapshot");
+    if (snapshot?.t !== "watchSnapshot") throw new Error("no live snapshot");
+    expect(snapshot.rooms[0]!.racers[0]!.state?.progress).toBe(0.5);
   });
 });
 
@@ -158,7 +210,7 @@ describe("lobby: racing", () => {
     l.handle(b.conn, { t: "finish", totalMs: 101_000 });
     l.handle(a.conn, { t: "quick", trackId: "t" });
     l.handle(b.conn, { t: "quick", trackId: "t" });
-    expect(a.got.filter((m) => m.t === "match").length).toBe(2);
+    expect(a.got.filter((m) => m.t === "roomJoined").length).toBe(1);
   });
 });
 

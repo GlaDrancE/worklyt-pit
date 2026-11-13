@@ -129,8 +129,22 @@ function blobTexture(): THREE.CanvasTexture {
   return new THREE.CanvasTexture(c);
 }
 
+function bodyGradientTexture(colors: readonly [number, number, number]): THREE.CanvasTexture {
+  const c = document.createElement("canvas");
+  c.width = c.height = 256;
+  const g = c.getContext("2d")!;
+  const grad = g.createLinearGradient(0, 0, 256, 256);
+  colors.forEach((color, i) => grad.addColorStop(i / (colors.length - 1), `#${color.toString(16).padStart(6, "0")}`));
+  g.fillStyle = grad;
+  g.fillRect(0, 0, c.width, c.height);
+  const texture = new THREE.CanvasTexture(c);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 export interface Livery {
   body: number;
+  bodyGradient?: readonly [number, number, number];
   accent: number;
   helmet: number;
   compound: number;
@@ -199,8 +213,10 @@ export class CarView {
   private readonly tmpDir = new THREE.Vector3();
 
   constructor(livery: Livery = DEFAULT_LIVERY, lod: CarLod = "hi") {
+    const bodyMap = livery.bodyGradient ? bodyGradientTexture(livery.bodyGradient) : null;
     const paint = new THREE.MeshPhysicalMaterial({
-      color: livery.body,
+      color: bodyMap ? 0xffffff : livery.body,
+      map: bodyMap,
       roughness: 0.34,
       metalness: 0.1,
       clearcoat: 1,
@@ -220,7 +236,7 @@ export class CarView {
     const led = new THREE.MeshStandardMaterial({ color: 0x103010, emissive: 0x30ff60, emissiveIntensity: 0.8 });
     this.rearLight = new THREE.MeshStandardMaterial({ color: 0x400000, emissive: 0xff1010, emissiveIntensity: 0.6 });
     this.paintMat = paint;
-    this.paintBase = new THREE.Color(livery.body);
+    this.paintBase = new THREE.Color(bodyMap ? 0xffffff : livery.body);
 
     const tpl = getCarTemplate();
     if (tpl) {

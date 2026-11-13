@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Live TrackRush race spectator and leaderboard." />
+    <title>TrackRush Live Admin</title>
+  </head>
+  <body>
+    <div class="admin-shell">
+      <header class="admin-header">
+        <div>
+          <h1>TRACKRUSH <span>LIVE</span></h1>
+          <p id="connection-status" role="status" aria-live="polite">Connecting to race relay…</p>
+        </div>
+        <label>Race room
+          <select id="room-select" aria-label="Select race room"></select>
+        </label>
+      </header>
+      <main>
+        <section class="spectator-view" aria-label="Third-person spectator camera">
+          <canvas id="spectator" aria-label="Automatic third-person camera cycling through racers"></canvas>
+          <div id="camera-label" aria-live="polite">Waiting for racers…</div>
+        </section>
+        <aside class="leaderboard">
+          <h2>LIVE LEADERBOARD</h2>
+          <p id="room-summary">No active race rooms.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Pos</th><th>Driver</th><th>Progress</th></tr></thead>
+              <tbody id="leaderboard-body"></tbody>
+            </table>
+          </div>
+          <p class="hint">Standings update as racer progress is received. Camera changes driver every five seconds.</p>
+        </aside>
+      </main>
+    </div>
+    <script type="module" src="./src/admin.ts"></script>
+  </body>
+</html>

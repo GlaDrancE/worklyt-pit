@@ -1,4 +1,4 @@
-import { POINTS_BY_PLACE, type BoardEntry, type ClientMsg, type PlayerInfo, type ServerMsg, type Standing } from "../src/net/protocol";
+import { POINTS_BY_PLACE, type BoardEntry, type ClientMsg, type LiveRoom, type PlayerInfo, type PlayerState, type ServerMsg, type Standing } from "../src/net/protocol";
 
 /** One connected socket (or a test double). */
 export interface Conn {
@@ -13,6 +13,7 @@ export interface BoardStore {
 /** Limits so that strangers sending made-up track or driver ids cannot make the board grow without end. */
 export const MAX_TRACKS = 300;
 export const MAX_PER_TRACK = 5000;
+export const MAX_ROOM_PLAYERS = 32;
 
 /** Best lap per driver per track, held in memory. `onChange` lets the server persist it. */
 export class MemoryBoard implements BoardStore {
@@ -65,16 +66,20 @@ interface Player extends PlayerInfo {
   conn: Conn;
   roomId: string | null;
   queuedTrack: string | null;
+  state: PlayerState | null;
+  totalMs: number | null;
 }
 
 interface Room {
   id: string;
   trackId: string;
-  players: [Player, Player];
+  kind: "invite" | "open";
+  players: Player[];
   ready: Set<string>;
   started: boolean;
   finished: Map<string, number>;
   done: boolean;
+  startedAt: number;
   timer: unknown;
 }
 
@@ -85,6 +90,7 @@ export interface LobbyOptions {
   setTimer?: (fn: () => void, ms: number) => unknown;
   clearTimer?: (h: unknown) => void;
   rules?: LobbyRules;
+  maxPlayers?: number;
 }
 
 /**
@@ -103,6 +109,7 @@ export interface LobbyRules {
 
 export class Lobby {
   private readonly players = new Map<Conn, Player>();
+  private readonly watchers = new Set<Conn>();
   private readonly byId = new Map<string, Player>();
   private readonly queue: Player[] = [];
   private readonly invites = new Map<string, { from: string; trackId: string }>(); // keyed by target id
@@ -113,11 +120,14 @@ export class Lobby {
   private readonly setTimer: (fn: () => void, ms: number) => unknown;
   private readonly clearTimer: (h: unknown) => void;
   private readonly rules: LobbyRules;
+  private readonly maxPlayers: number;
+  private watchTimer: unknown = null;
 
   constructor(opts: LobbyOptions = {}) {
     this.board = opts.board ?? new MemoryBoard();
     this.dnfTimeoutMs = opts.dnfTimeoutMs ?? 90_000;
     this.rules = opts.rules ?? {};
+    this.maxPlayers = Math.min(MAX_ROOM_PLAYERS, Math.max(2, Math.floor(opts.maxPlayers ?? MAX_ROOM_PLAYERS)));
     this.setTimer = opts.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
     this.clearTimer = opts.clearTimer ?? ((h) => clearTimeout(h as ReturnType<typeof setTimeout>));
   }
@@ -127,6 +137,11 @@ export class Lobby {
   }
 
   handle(conn: Conn, msg: ClientMsg): void {
+    if (msg.t === "watch") {
+      this.watchers.add(conn);
+      conn.send({ t: "watchSnapshot", rooms: this.liveRooms() });
+      return;
+    }
     if (msg.t === "hello") {
       if (this.rules.authorize && !this.rules.authorize(msg.id, msg.token)) {
         return conn.send({ t: "error", msg: "This driver ID belongs to another device. Use the device you first played on, or update your game." });
@@ -153,7 +168,13 @@ export class Lobby {
         return this.ready(p);
       case "state": {
         const room = this.roomOf(p);
-        if (room?.started && !room.done) this.other(room, p).conn.send({ t: "opp", s: msg.s });
+        if (room?.started && !room.done) {
+          p.state = msg.s;
+          for (const other of room.players) {
+            if (other !== p) other.conn.send({ t: "opp", id: p.id, s: msg.s });
+          }
+          if (room.kind === "open") this.scheduleWatchSnapshot();
+        }
         return;
       }
       case "finish":
@@ -169,6 +190,7 @@ export class Lobby {
   }
 
   disconnect(conn: Conn): void {
+    this.watchers.delete(conn);
     const p = this.players.get(conn);
     if (!p) return;
     this.dequeue(p);
@@ -189,7 +211,7 @@ export class Lobby {
       return;
     }
     if (!this.players.has(conn)) {
-      const p: Player = { id, name, conn, roomId: null, queuedTrack: null, ...(colour ? { colour } : {}) };
+      const p: Player = { id, name, conn, roomId: null, queuedTrack: null, state: null, totalMs: null, ...(colour ? { colour } : {}) };
       this.players.set(conn, p);
       this.byId.set(id, p);
     } else {
@@ -226,27 +248,51 @@ export class Lobby {
   private quick(p: Player, trackId: string): void {
     if (p.roomId) return p.conn.send({ t: "error", msg: "You're already in a race." });
     this.dequeue(p);
-    const other = this.queue.find((q) => q.id !== p.id);
-    if (other) {
-      const track = other.queuedTrack ?? trackId;
-      this.dequeue(other);
-      this.makeRoom(other, p, track);
+    const room = [...this.rooms.values()].find((r) => r.kind === "open" && !r.done && r.trackId === trackId);
+    if (room) {
+      if (room.players.length >= this.maxPlayers) return p.conn.send({ t: "error", msg: `This race is full (${this.maxPlayers} drivers).` });
+      room.players.push(p);
+      p.roomId = room.id;
+      p.state = null;
+      p.totalMs = null;
+      p.conn.send({ t: "roomJoined", room: this.liveRoom(room), selfId: p.id });
+      for (const other of room.players) {
+        if (other !== p) other.conn.send({ t: "playerJoined", roomId: room.id, player: info(p) });
+      }
+      this.scheduleWatchSnapshot();
       return;
     }
-    p.queuedTrack = trackId;
-    this.queue.push(p);
-    p.conn.send({ t: "queued" });
+    const created: Room = {
+      id: `r${this.nextRoom++}`,
+      trackId,
+      kind: "open",
+      players: [p],
+      ready: new Set(),
+      started: true,
+      finished: new Map(),
+      done: false,
+      startedAt: Date.now(),
+      timer: null,
+    };
+    p.roomId = created.id;
+    p.state = null;
+    p.totalMs = null;
+    this.rooms.set(created.id, created);
+    p.conn.send({ t: "roomJoined", room: this.liveRoom(created), selfId: p.id });
+    this.scheduleWatchSnapshot();
   }
 
   private makeRoom(a: Player, b: Player, trackId: string): void {
     const room: Room = {
       id: `r${this.nextRoom++}`,
       trackId,
+      kind: "invite",
       players: [a, b],
       ready: new Set(),
       started: false,
       finished: new Map(),
       done: false,
+      startedAt: Date.now(),
       timer: null,
     };
     this.rooms.set(room.id, room);
@@ -272,14 +318,32 @@ export class Lobby {
       return p.conn.send({ t: "error", msg: "That race time isn't possible on this circuit, so it wasn't counted." });
     }
     room.finished.set(p.id, totalMs);
-    this.other(room, p).conn.send({ t: "oppFinished", name: p.name, totalMs });
-    if (room.finished.size === 2) return this.sendResult(room, false);
-    room.timer = this.setTimer(() => this.sendResult(room, false), this.dnfTimeoutMs);
+    p.totalMs = totalMs;
+    if (room.kind === "open") {
+      for (const other of room.players) {
+        if (other !== p) other.conn.send({ t: "playerFinished", roomId: room.id, id: p.id, name: p.name, totalMs });
+      }
+      this.scheduleWatchSnapshot();
+    } else {
+      this.other(room, p).conn.send({ t: "oppFinished", name: p.name, totalMs });
+    }
+    if (room.finished.size === room.players.length) return this.sendResult(room, false);
+    if (!room.timer) room.timer = this.setTimer(() => this.sendResult(room, false), this.dnfTimeoutMs);
   }
 
   private leaveRoom(p: Player): void {
     const room = this.roomOf(p);
     if (!room) return;
+    if (room.kind === "open") {
+      room.players = room.players.filter((player) => player !== p);
+      p.roomId = null;
+      p.state = null;
+      for (const other of room.players) other.conn.send({ t: "playerLeft", roomId: room.id, id: p.id, name: p.name });
+      if (room.players.length === 0) this.closeRoom(room);
+      else if (room.finished.size >= room.players.length) this.sendResult(room, false);
+      this.scheduleWatchSnapshot();
+      return;
+    }
     const other = this.other(room, p);
     p.roomId = null;
     if (room.done) return;
@@ -318,8 +382,11 @@ export class Lobby {
   }
 
   private closeRoom(room: Room): void {
+    if (room.timer) this.clearTimer(room.timer);
+    room.timer = null;
     for (const pl of room.players) if (pl.roomId === room.id) pl.roomId = null;
     this.rooms.delete(room.id);
+    this.scheduleWatchSnapshot();
   }
 
   // -------------------------------------------------------------- helpers
@@ -329,7 +396,34 @@ export class Lobby {
   }
 
   private other(room: Room, p: Player): Player {
-    return room.players[0] === p ? room.players[1] : room.players[0];
+    return room.players.find((player) => player !== p)!;
+  }
+
+  private liveRoom(room: Room): LiveRoom {
+    return {
+      id: room.id,
+      trackId: room.trackId,
+      startedAt: room.startedAt,
+      maxPlayers: this.maxPlayers,
+      racers: room.players.map((p) => ({
+        ...info(p),
+        state: p.state,
+        totalMs: p.totalMs,
+      })),
+    };
+  }
+
+  private liveRooms(): LiveRoom[] {
+    return [...this.rooms.values()].filter((room) => room.kind === "open" && !room.done).map((room) => this.liveRoom(room));
+  }
+
+  private scheduleWatchSnapshot(): void {
+    if (this.watchers.size === 0 || this.watchTimer !== null) return;
+    this.watchTimer = this.setTimer(() => {
+      this.watchTimer = null;
+      const message: ServerMsg = { t: "watchSnapshot", rooms: this.liveRooms() };
+      for (const watcher of this.watchers) watcher.send(message);
+    }, 100);
   }
 
   private dequeue(p: Player): void {

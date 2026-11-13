@@ -38,22 +38,19 @@ function connect(id: string, name: string) {
 }
 
 describe("relay over real WebSockets", () => {
-  it("matches two strangers, relays positions and reports the result", async () => {
+  it("joins strangers to a live room, relays positions and reports the result", async () => {
     const a = await connect("aaaa0001", "Ann");
     const b = await connect("bbbb0002", "Ben");
     a.send({ t: "quick", trackId: "apex-park" });
-    await a.next("queued");
+    const first = await a.next("roomJoined");
+    expect(first.t === "roomJoined" && first.room.racers).toHaveLength(1);
     b.send({ t: "quick", trackId: "apex-park" });
-    const [ma, mb] = await Promise.all([a.next("match"), b.next("match")]);
-    expect(ma.opponent.name).toBe("Ben");
-    expect(mb.opponent.name).toBe("Ann");
-    a.send({ t: "ready" });
-    b.send({ t: "ready" });
-    await Promise.all([a.next("start"), b.next("start")]);
+    const joined = await b.next("roomJoined");
+    expect(joined.t === "roomJoined" && joined.room.racers.map((r) => r.name)).toEqual(["Ann", "Ben"]);
 
     a.send({ t: "state", s: { x: 5, y: 0.6, z: 9, qx: 0, qy: 0, qz: 0, qw: 1, speedKmh: 200, progress: 0.4, steer: 0.1 } });
     const opp = await b.next("opp");
-    expect(opp.s.progress).toBeCloseTo(0.4);
+    expect(opp.t === "opp" && opp.s.progress).toBeCloseTo(0.4);
 
     a.send({ t: "finish", totalMs: 90_000 });
     b.send({ t: "finish", totalMs: 91_000 });

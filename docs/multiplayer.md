@@ -1,19 +1,18 @@
-# Online 1v1
+# Online multiplayer
 
-Two players race the same circuit at the same time. Each sees the other as a coloured car (cars don't collide). A small relay server passes messages between the two games.
+Players on the same circuit and conditions join a shared live race room. Each sees the other drivers as coloured cars (cars don't collide). The relay passes car positions to everyone in the room and supports up to 32 connected racers per room.
 
 ## Running a race
 
-1. Start a relay (below).
-2. Everyone opens the game, chooses the **1 vs 1** tab and enters the relay address, then presses **Connect**.
-3. **Invite by ID:** send your driver ID to a friend (the panel has a Copy button) and have them press *Invite*. **Race a stranger:** press *Race a stranger* and you're paired with the next person searching on the same relay who picked the same conditions.
-4. Pick your car colour before connecting or searching. You can use any colour you've unlocked. If you both choose the same one, your rival's car is drawn in a clearly different colour on your screen.
-5. After the lights go out, first to finish wins: **25 points** for 1st and **18** for 2nd. If the other driver quits you win by forfeit. A second driver gets 90 seconds to finish after the winner crosses the line.
-6. Winners get confetti. Solo races also pop confetti and give 10 points per valid lap (+10 for a personal best).
+1. Start a relay (below). For local play, it listens on port 8787.
+2. Set `VITE_RELAY_URL` to the relay's `wss://` address before building the web app. Locally served games use `ws://<page-host>:8787` automatically.
+3. Open the same game link in each browser. The game connects automatically and joins the active room for the same circuit and conditions. Late arrivals join the race in progress. A room accepts up to 32 drivers; the relay rejects further joins while it is full.
+4. Each driver sees all connected racers and the in-game position updates as they overtake. The public, read-only spectator and live leaderboard page is `admin.html`; it cycles a third-person camera through racers every five seconds.
+5. Race times are local to each driver's start. Because late arrivals join mid-race, the live leaderboard ranks racers by current progress until they finish, then by finish time.
 
-Both drivers use race handling, no crash damage and the same steering feel, so the cars are equal. Time of day and weather are agreed in the lobby.
+The spectator page is intentionally public and displays live driver names, positions, and race progress to anyone who can open its URL.
 
-The fastest-lap ranking appears on the menu and before the start, with driver names. It merges this device's history with the relay's board.
+The relay runs the race room and standings; the game clients simulate the cars and send their positions. Online cars do not collide. The relay's room limit is configured in `server/lobby.ts`.
 
 ## Running the relay locally
 
@@ -21,13 +20,13 @@ The fastest-lap ranking appears on the menu and before the start, with driver na
 npm run server
 ```
 
-It listens on port 8787 (set `PORT` to change it). Players on the same Wi-Fi connect to `ws://<your PC's IP>:8787`. For friends elsewhere, host it somewhere reachable, or use a tunnel and share its `wss://` address.
+It listens on port 8787 (set `PORT` to change it). Players on the same Wi-Fi connect to `ws://<your PC's IP>:8787`. For friends elsewhere, host it somewhere reachable, or use a tunnel and set its `wss://` address as `VITE_RELAY_URL` when building the web app.
 
 ## Hosting the relay for free
 
 1. Push the project to GitHub.
 2. On [Render](https://render.com) choose New → Blueprint and pick the repo. `render.yaml` and the `Dockerfile` do the rest.
-3. In the game enter `wss://your-service.onrender.com` as the server address. An https page can only connect to `wss://` addresses.
+3. Set `VITE_RELAY_URL=wss://your-service.onrender.com` in the web app's build environment and rebuild it. An https page can only connect to `wss://` addresses.
 
 Free Render services sleep when idle, so the first connection after a break can take about a minute. Any host that runs Docker works the same way (Fly.io, Railway, a home server). The Docker setup hasn't been run end to end here, so if it fails, the error message will say which step.
 

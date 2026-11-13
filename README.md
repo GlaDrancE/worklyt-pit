@@ -2,7 +2,7 @@
 
 # TrackRush Pro
 
-**A free, browser-based 3D racing game with rivals, damage, race control and online 1v1.**
+**A free, browser-based 3D racing game with rivals, damage, race control and live multiplayer rooms.**
 
 [![CI](https://github.com/vishal-kushwaha-9912/trackrush-pro/actions/workflows/ci.yml/badge.svg)](https://github.com/vishal-kushwaha-9912/trackrush-pro/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -15,7 +15,7 @@
 
 </div>
 
-TrackRush Pro is a racing game that runs entirely in the browser on desktop and phones. It has an original open-wheel car, seven circuits, computer-driven rivals, crash damage, safety cars and red flags, and online 1v1 races. It is built with Three.js and Rapier, and it costs nothing to run: no accounts, no API keys, no AI services, no paid hosting.
+TrackRush Pro is a racing game that runs entirely in the browser on desktop and phones. It has an original open-wheel car, seven circuits, computer-driven rivals, crash damage, safety cars and red flags, and live multiplayer rooms for up to 32 drivers. The read-only race spectator and live leaderboard are at `admin.html`. It is built with Three.js and Rapier, and it costs nothing to run: no accounts, no API keys, no AI services, no paid hosting.
 
 > TrackRush Pro is an original game. The circuits and branding are not based on any real circuit, team or product, and it is not an official motorsport game.
 
@@ -36,11 +36,11 @@ TrackRush Pro is a racing game that runs entirely in the browser on desktop and 
 | --- | --- |
 | **Driving** | Raycast-vehicle physics tuned for a single-seater: about 2.3 s to 100 km/h, around 320 km/h top speed, downforce, brake bias and grass that slows you down. Race and drift handling. |
 | **Circuits** | Four full-length circuits (2.6 to 4.2 km) and three training grounds under 2 km that drill straights, turns and corners. Day, dusk and night, dry or wet. |
-| **Racing** | 3-2-1 start, three sectors, validated laps, 1, 3 or 5 rivals at three difficulties, tyre wear and pit stops. |
+| **Racing** | 3-2-1 start, three sectors, validated laps, 1, 2 or 5 rivals at three difficulties, tyre wear and pit stops. |
 | **Race control** | Crash damage in ten zones, yellow flags, virtual safety car, safety car with a recovery truck, and red flags. |
 | **Night lighting** | Street lamps give real light at dusk and night, and can be switched off for a harder race. |
 | **Ghost and replay** | Your best lap races you as a ghost. Rewatch it from four cameras and export a lap image coloured by speed. |
-| **Online 1v1** | Invite by driver ID or race a stranger through a small relay server you can host for free. |
+| **Online multiplayer** | Join a live room with up to 32 drivers through a relay server you can host for free. |
 | **Progression** | Points, car colours, daily challenge, championship seasons and achievements. |
 | **Phones** | Portrait and landscape layouts, touch buttons or drag wheel, tilt steering and an easy-drive mode. |
 | **Your data** | Stored on your device by default, with an optional free Cloudflare backup. Telemetry exports to CSV or JSON. |
@@ -65,7 +65,7 @@ Open the address Vite prints, usually http://localhost:5173.
 | `npm run preview` | Serve the production build locally |
 | `npm run typecheck` | Type-check only |
 | `npm test` | Run the full test suite |
-| `npm run server` | Start the 1v1 relay (port 8787, or set `PORT`) |
+| `npm run server` | Start the multiplayer relay (port 8787, or set `PORT`) |
 
 ## Controls
 
