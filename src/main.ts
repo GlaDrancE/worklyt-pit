@@ -645,6 +645,7 @@ async function boot(): Promise<void> {
   };
   const updateMpTrack = () => (byId("mp-track").textContent = parseKey(onlineKey()).text);
   const client = new Multiplayer({ id: profile.id, name: profile.name });
+  let resultLobbyTimer = 0;
   let autoQuickSearchStarted = false;
   mp = client;
   game.onSendState = (st) => client.sendState(st);
@@ -706,6 +707,7 @@ async function boot(): Promise<void> {
     if (trackId === trackSelect.value) drawRanking();
   };
   client.events.match = (m: MatchInfo) => {
+    autoQuickSearchStarted = true;
     trackSelect.value = parseKey(m.trackId).track;
     describe();
     updateMpTrack();
@@ -721,6 +723,7 @@ async function boot(): Promise<void> {
     }
   };
   client.events.room = (room, selfId) => {
+    autoQuickSearchStarted = true;
     const pk = parseKey(room.trackId);
     trackSelect.value = pk.track;
     describe();
@@ -736,7 +739,17 @@ async function boot(): Promise<void> {
   client.events.opponent = (id, st) => game.receiveOpponent(st, id);
   client.events.oppFinished = (name, ms) => game.opponentFinished(name, ms);
   client.events.oppLeft = (name) => game.opponentLeft(name);
-  client.events.result = (standings, forfeit) => game.applyResult(standings, forfeit);
+  client.events.result = (standings, forfeit) => {
+    game.applyResult(standings, forfeit);
+    window.clearTimeout(resultLobbyTimer);
+    resultLobbyTimer = window.setTimeout(() => {
+      game.toMenu();
+      showTouch(false);
+      menu.classList.remove("hidden");
+      showTab("online");
+      openMp();
+    }, 5000);
+  };
 
   // Car colour for 1 vs 1: mirrors the garage colour select so both always agree.
   const liveryMenu = byId<HTMLSelectElement>("livery-select");
@@ -794,7 +807,10 @@ async function boot(): Promise<void> {
     }
     client.invite(id, onlineKey());
   });
-  byId("mp-quick").addEventListener("click", () => client.quick(onlineKey()));
+  byId("mp-quick").addEventListener("click", () => {
+    autoQuickSearchStarted = true;
+    client.quick(onlineKey());
+  });
   mpCancel.addEventListener("click", () => {
     client.leave();
     mpStatus.textContent = "Cancelled.";

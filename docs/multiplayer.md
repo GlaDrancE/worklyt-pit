@@ -10,6 +10,8 @@ Players on the same circuit and conditions join a shared live race room. Each se
 4. Each driver sees all connected racers and the in-game position updates as they overtake. The public, read-only spectator and live leaderboard page is `admin.html`; it cycles a third-person camera through racers every five seconds.
 5. Race times are local to each driver's start. Because late arrivals join mid-race, the live leaderboard ranks racers by current progress until they finish, then by finish time.
 
+After an online race, the result screen shows the score and standings for five seconds, then returns to the multiplayer lobby. The existing relay connection stays open, so drivers can join another race without reconnecting.
+
 The spectator page is intentionally public and displays live driver names, positions, and race progress to anyone who can open its URL.
 
 The relay runs the race room and standings; the game clients simulate the cars and send their positions. Online cars do not collide. The relay's room limit is configured in `server/lobby.ts`.

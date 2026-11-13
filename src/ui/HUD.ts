@@ -62,6 +62,10 @@ export class HUD {
     this.root.classList.toggle("hidden", !v);
   }
 
+  setOnlineResultMode(online: boolean): void {
+    this.results.classList.toggle("online-result", online);
+  }
+
   /** Free drive hides every timing widget. */
   setMode(mode: "race" | "free"): void {
     this.root.classList.toggle("free", mode === "free");

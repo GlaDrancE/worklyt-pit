@@ -101,6 +101,18 @@ input[type="text"]:focus-visible { outline: 2px solid #fff; outline-offset: 2px;
 #results-versus th, #results-versus td { text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); }
 #results-versus h2 { margin: 0 0 6px; font-size: 22px; }
 #results-versus tr.me td { color: #ffd21f; font-weight: 700; }
+#results.online-result #results-body, #results.online-result #results-drift, #results.online-result #results-extra,
+#results.online-result #results-ach, #results.online-result #results-restart, #results.online-result #results-replay,
+#results.online-result #results-share, #results.online-result #results-export { display: none !important; }
+#results.online-result #results-points {
+  display: block;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  background: var(--glass);
+  text-align: center;
+}
 .points { font-size: 18px; margin: 0; }
 .points strong { color: #ffd21f; }
 button.small { padding: 4px 10px; font-size: 12px; }

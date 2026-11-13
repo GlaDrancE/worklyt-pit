@@ -442,6 +442,7 @@ export class Game {
     this.hud.hideResults();
     this.hud.clearTransient();
     this.hud.setMode(mode);
+    this.hud.setOnlineResultMode(false);
     this.input.calibrateTilt();
     this.hud.setVisible(true);
     this.hud.setSpeed(0);
@@ -1112,6 +1113,7 @@ export class Game {
         const points = mine ? mine.points : solo ? validLaps * 10 + (s.newBest ? 10 : 0) : undefined;
         this.saveRace(s, true, points, mine ? { position: mine.place, fieldSize: standings!.length } : undefined);
         this.sound.cheer(1);
+        this.hud.setOnlineResultMode(networked);
         this.hud.showResults(s.model.def.name, e.laps, s.race?.bestMs ?? null, this.driver.name);
         this.showDriftResult(s);
         s.place = mine ? `P${mine.place} of ${standings!.length}` : null;
@@ -1307,10 +1309,12 @@ export class Game {
     }
     const me = standings.find((x) => x.id === this.driver.id);
     const other = standings.find((x) => x.id !== this.driver.id);
+    this.hud.setOnlineResultMode(true);
     this.hud.setVersus(null);
     this.hud.showVersusResult(standings, this.driver.id, forfeit);
     if (me) {
-      this.hud.setPoints(`Points earned: +${me.points}  (P${me.place} of ${standings.length})`);
+      const time = me.totalMs === null ? "DNF" : formatTime(me.totalMs);
+      this.hud.setPoints(`Your score · ${me.name} · P${me.place}/${standings.length} · ${time} · +${me.points} points`);
       if (this.lastVersusRecord) {
         updateRecord(this.lastVersusRecord.id, {
           points: me.points,
