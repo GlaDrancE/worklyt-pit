@@ -20,7 +20,7 @@ In the Oracle Cloud Console, create a compute instance with:
 
 Before creating it, check that the shape and boot volume are marked **Always Free eligible** and that your tenancy's total A1 allocation stays within its free allowance (2 OCPUs, 12 GB memory, and 200 GB block storage). Don't enable paid upgrades or select paid resources.
 
-In the subnet's security list or the instance's network security group, add ingress rules:
+In the security list attached to the public subnet or the NSG attached to the VM's primary VNIC, add ingress rules:
 
 | Protocol | Port | Source                       |
 | -------- | ---: | ---------------------------- |
@@ -30,9 +30,13 @@ In the subnet's security list or the instance's network security group, add ingr
 
 Do not open port `8787` to the internet; Caddy will proxy the relay locally.
 
+The public subnet's route table must also have `0.0.0.0/0` routed to an attached Internet Gateway.
+
 ## 2. Point a hostname at the VM
 
 At your DNS provider, create an **A** record for `relay.worklyft.in` pointing to the VM's public IPv4 address. With DuckDNS, register a subdomain and set its IP to the VM's public IPv4 address. If using Cloudflare DNS, leave this record **DNS only** (gray cloud) for the simplest certificate setup. Wait until the hostname resolves to the VM before continuing.
+
+If Cloudflare reports **Origin DNS error** or **Origin not found**, confirm the `relay` A record points to the VM's public IPv4 address, is set to **DNS only**, and has no conflicting CNAME record. On the VM, `getent ahostsv4 relay.worklyft.in` should return that public IP.
 
 If you don't have a domain, the DuckDNS hostname avoids a domain purchase, but it is provided by a third party. A public hostname is necessary for the browser to trust the relay's WSS certificate.
 
@@ -122,6 +126,8 @@ curl -fsS https://relay.worklyft.in/health
 ```
 
 The health check should print `ok`; open `https://relay.worklyft.in/` to play. If either fails, check that DNS points to the VM and both Oracle's network rules and UFW allow ports 80 and 443. Caddy's certificate errors are available with `sudo journalctl -u caddy --no-pager -n 50`.
+
+If local checks work but an external connection reports **No route to host** or times out, verify that the address in DNS is still the VM's public IPv4, then check the attached OCI NSG/security list and public-subnet Internet Gateway route. To test Caddy without relying on DNS, run `curl -vk --resolve relay.worklyft.in:443:PUBLIC_IPV4 https://relay.worklyft.in/health` from outside the VM, replacing `PUBLIC_IPV4` with the VM's public address.
 
 ## 6. (Optional) Deploy the game to Cloudflare Pages
 
