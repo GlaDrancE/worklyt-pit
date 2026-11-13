@@ -2,7 +2,7 @@
 FROM node:22-alpine
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --ignore-scripts
+RUN npm i
 COPY server ./server
 COPY src/net/protocol.ts ./src/net/protocol.ts
 COPY tsconfig.json ./

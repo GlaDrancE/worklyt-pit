@@ -22,11 +22,11 @@ Before creating it, check that the shape and boot volume are marked **Always Fre
 
 In the subnet's security list or the instance's network security group, add ingress rules:
 
-| Protocol | Port | Source |
-| --- | ---: | --- |
-| TCP | 22 | Your current public IP `/32` |
-| TCP | 80 | `0.0.0.0/0` |
-| TCP | 443 | `0.0.0.0/0` |
+| Protocol | Port | Source                       |
+| -------- | ---: | ---------------------------- |
+| TCP      |   22 | Your current public IP `/32` |
+| TCP      |   80 | `0.0.0.0/0`                  |
+| TCP      |  443 | `0.0.0.0/0`                  |
 
 Do not open port `8787` to the internet; Caddy will proxy the relay locally.
 
@@ -41,20 +41,24 @@ If you don't have a domain, the DuckDNS hostname avoids a domain purchase, but i
 SSH into the VM as `ubuntu`, then run:
 
 ```bash
+set -euo pipefail
 sudo apt update
-sudo apt install -y docker.io git
+sudo apt install -y docker.io git ufw
 sudo systemctl enable --now docker
 
-sudo apt install --yes debian-keyring debian-archive-keyring apt-transport-https curl
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+sudo apt install --yes debian-keyring debian-archive-keyring apt-transport-https curl gnupg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
 curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
 sudo chmod o+r /usr/share/keyrings/caddy-stable-archive-keyring.gpg
 sudo chmod o+r /etc/apt/sources.list.d/caddy-stable.list
 sudo apt update
+apt-cache policy caddy
 sudo apt install -y caddy
 ```
 
-Allow the same ports through Ubuntu's firewall:
+`apt-cache policy caddy` should show a version under `Candidate`. If it shows `(none)`, stop: the Caddy repository did not load. Check the preceding `apt update` output for errors before continuing.
+
+Allow the same ports through Ubuntu's firewall (the `ufw` package is installed in step 3):
 
 ```bash
 sudo ufw allow OpenSSH
@@ -70,7 +74,7 @@ If asked to confirm enabling UFW, answer `y`.
 Clone the GitHub repository and build the relay image:
 
 ```bash
-git clone https://github.com/vishal-kushwaha-9912/Track-Rush-F1.git "$HOME/Track-Rush-F1"
+git clone https://github.com/GlaDrancE/worklyt-pit "$HOME/Track-Rush-F1"
 cd "$HOME/Track-Rush-F1"
 sudo docker build -t trackrush-relay .
 sudo mkdir -p /opt/trackrush-data
@@ -79,12 +83,7 @@ sudo mkdir -p /opt/trackrush-data
 Start the relay container. The bind mount keeps leaderboard and player data on the VM across container updates and restarts:
 
 ```bash
-sudo docker run -d \
-  --name trackrush-relay \
-  --restart unless-stopped \
-  -p 127.0.0.1:8787:8787 \
-  -v /opt/trackrush-data:/data \
-  trackrush-relay
+sudo docker run -d --name trackrush-relay --restart unless-stopped -p 127.0.0.1:8787:8787 -v /opt/trackrush-data:/data trackrush-relay
 ```
 
 ## 5. Enable HTTPS/WSS with Caddy
@@ -93,16 +92,24 @@ Replace `relay.example.com` with your hostname:
 
 ```bash
 sudo tee /etc/caddy/Caddyfile >/dev/null <<'EOF'
-relay.example.com {
+relay.worklyft.in {
     reverse_proxy 127.0.0.1:8787
 }
 EOF
 
 sudo caddy validate --config /etc/caddy/Caddyfile
+sudo systemctl enable --now caddy
 sudo systemctl reload caddy
 ```
 
 Caddy obtains and renews the HTTPS certificate automatically. The DNS record must point to the VM, and ports 80 and 443 must be reachable for this to work.
+
+If `enable --now` fails, inspect the service before continuing:
+
+```bash
+sudo systemctl status caddy --no-pager -l
+sudo journalctl -u caddy --no-pager -n 50
+```
 
 Check the relay and HTTPS:
 
@@ -120,21 +127,22 @@ The `curl` command should print `TrackRush relay is running.` If it fails, check
 2. Set the production branch to `main`.
 3. Use these build settings:
 
-   | Setting | Value |
-   | --- | --- |
-   | Framework preset | Vite (or None) |
-   | Build command | `npm run build` |
-   | Build output directory | `dist` |
-   | Root directory | Leave unset (repository root) |
+   | Setting                | Value                         |
+   | ---------------------- | ----------------------------- |
+   | Framework preset       | Vite (or None)                |
+   | Build command          | `npm run build`               |
+   | Build output directory | `dist`                        |
+   | Root directory         | Leave unset (repository root) |
 
 4. Add these **Production** environment variables before deploying:
 
-   | Variable | Value |
-   | --- | --- |
-   | `NODE_VERSION` | `22` |
+   | Variable         | Value                     |
+   | ---------------- | ------------------------- |
+   | `NODE_VERSION`   | `22`                      |
    | `VITE_RELAY_URL` | `wss://relay.example.com` |
 
    Replace the relay hostname with yours. `VITE_RELAY_URL` is embedded into the game at build time; it must start with `wss://` and must not end with a slash.
+
 5. Save and deploy. Cloudflare will provide a game URL such as `https://<project>.pages.dev`. Open it and confirm the game loads. The spectator page is at `https://<project>.pages.dev/admin.html`.
 
 If you change `VITE_RELAY_URL`, trigger a new Pages deployment so the game is rebuilt with the new address.
