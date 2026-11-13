@@ -89,7 +89,7 @@ Gamepads and touch screens are supported too. See [Controls and handling](docs/c
 | [Controls and handling](docs/controls.md) | Keyboard, gamepad, touch, steering, drifting, settings |
 | [Gameplay guide](docs/gameplay.md) | Modes, circuits, training grounds, tyres, damage, race control, progression |
 | [Online 1v1](docs/multiplayer.md) | Running and hosting the relay, secure connections, anti-cheat |
-| [Deploying for free](docs/deployment.md) | GitHub Pages, Cloudflare and Render, step by step |
+| [Deploying for free](docs/deployment.md) | Cloudflare Pages, Oracle VM with Docker, and Render fallback |
 | [Player data](docs/data-storage.md) | What is stored where, and the Cloudflare D1 setup |
 | [Architecture](docs/architecture.md) | Project layout, car model pipeline, tuning files, tests |
 | [Contributing](CONTRIBUTING.md) | Setup, checks before a pull request, conventions |
@@ -107,7 +107,7 @@ Known limits:
 
 - Nothing is hosted for you. Online play needs someone to run the relay, see [Online 1v1](docs/multiplayer.md).
 - Lap times are reported by each game. The relay rejects impossible times and ties a driver ID to one device, but no browser game can be made fully cheat-proof.
-- The Docker and Render setup has not been run end to end.
+- The Docker image builds and serves the game and relay; the Render Blueprint has not been run end to end.
 - Phone sensors and screen locking vary by browser.
 
 ## Privacy

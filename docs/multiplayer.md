@@ -28,7 +28,7 @@ It listens on port 8787 (set `PORT` to change it). Players on the same Wi-Fi con
 2. On [Render](https://render.com) choose New → Blueprint and pick the repo. `render.yaml` and the `Dockerfile` do the rest.
 3. Set `VITE_RELAY_URL=wss://your-service.onrender.com` in the web app's build environment and rebuild it. An https page can only connect to `wss://` addresses.
 
-Free Render services sleep when idle, so the first connection after a break can take about a minute. Any host that runs Docker works the same way (Fly.io, Railway, a home server). The Docker setup hasn't been run end to end here, so if it fails, the error message will say which step.
+Free Render services sleep when idle, so the first connection after a break can take about a minute. Any host that runs Docker works the same way (Fly.io, Railway, a home server). The Docker image builds and serves both the game and relay; it has been built and smoke-tested. The Render Blueprint has not been run end to end.
 
 ## Secure connections
 

@@ -1,6 +1,6 @@
 import { createServer, type Server } from "node:http";
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { createReadStream, existsSync, readFileSync, statSync, writeFileSync, mkdirSync } from "node:fs";
+import { dirname, extname, isAbsolute, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { WebSocketServer, type WebSocket } from "ws";
 import { parseClientMessage, type ServerMsg } from "../src/net/protocol";
@@ -16,9 +16,29 @@ export interface RunningServer {
 }
 
 const MAX_MSGS_PER_SECOND = 120;
+const CONTENT_TYPES: Record<string, string> = {
+  ".css": "text/css; charset=utf-8",
+  ".glb": "model/gltf-binary",
+  ".html": "text/html; charset=utf-8",
+  ".ico": "image/x-icon",
+  ".jpeg": "image/jpeg",
+  ".jpg": "image/jpeg",
+  ".js": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".wasm": "application/wasm",
+  ".webp": "image/webp",
+  ".woff2": "font/woff2",
+};
 
 /** Starts the relay. Pass port 0 to let the OS pick one (used by tests). */
-export async function startServer(port = 8787, opts: { dataFile?: string; playersFile?: string; dnfTimeoutMs?: number; strict?: boolean } = {}): Promise<RunningServer> {
+export async function startServer(port = 8787, opts: { dataFile?: string; playersFile?: string; staticDir?: string; dnfTimeoutMs?: number; strict?: boolean } = {}): Promise<RunningServer> {
+  const staticDir = opts.staticDir ? resolve(opts.staticDir) : undefined;
+  if (staticDir && (!existsSync(staticDir) || !statSync(staticDir).isDirectory())) {
+    throw new Error(`Static directory does not exist: ${staticDir}`);
+  }
+
   const board = new MemoryBoard();
   if (opts.dataFile && existsSync(opts.dataFile)) {
     try {
@@ -80,6 +100,7 @@ export async function startServer(port = 8787, opts: { dataFile?: string; player
   const http: Server = createServer((req, res) => {
     const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type, x-player-token", "access-control-allow-methods": "GET, PUT, OPTIONS" };
     const url = new URL(req.url ?? "/", "http://x");
+    if (req.method === "GET" && url.pathname === "/health") return void res.writeHead(200, { "content-type": "text/plain" }).end("ok\n");
     const m = /^\/player\/([A-Za-z0-9]{4,16})$/.exec(url.pathname);
     if (req.method === "OPTIONS") return void res.writeHead(204, cors).end();
     if (m) {
@@ -110,6 +131,30 @@ export async function startServer(port = 8787, opts: { dataFile?: string; player
         return;
       }
     }
+    if (staticDir && (req.method === "GET" || req.method === "HEAD")) {
+      let filePath: string;
+      try {
+        filePath = resolve(staticDir, `.${decodeURIComponent(url.pathname)}`);
+      } catch {
+        return void res.writeHead(400).end();
+      }
+      const relativePath = relative(staticDir, filePath);
+      if (relativePath === ".." || relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath)) {
+        return void res.writeHead(403).end();
+      }
+      if (existsSync(filePath) && statSync(filePath).isDirectory()) filePath = resolve(filePath, "index.html");
+      if (!existsSync(filePath) || !statSync(filePath).isFile()) return void res.writeHead(404).end();
+      res.writeHead(200, { "content-type": CONTENT_TYPES[extname(filePath).toLowerCase()] ?? "application/octet-stream" });
+      if (req.method === "HEAD") return void res.end();
+      const stream = createReadStream(filePath);
+      stream.on("error", (e) => {
+        console.error("Couldn't serve a static file:", e);
+        if (res.headersSent) res.destroy(e);
+        else res.writeHead(500).end();
+      });
+      return void stream.pipe(res);
+    }
+    if (staticDir) return void res.writeHead(404).end();
     res.writeHead(200, { ...cors, "content-type": "text/plain" });
     res.end(`TrackRush relay is running. ${lobby.online} driver(s) online, ${players.count} player(s) saved.\n`);
   });
@@ -161,7 +206,7 @@ export async function startServer(port = 8787, opts: { dataFile?: string; player
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href;
 if (isMain) {
   const port = Number(process.env.PORT ?? 8787);
-  startServer(port, { dataFile: process.env.BOARD_FILE ?? resolve("server/data/board.json"), playersFile: process.env.PLAYERS_FILE ?? resolve("server/data/players.json") }).then((s) => {
+  startServer(port, { dataFile: process.env.BOARD_FILE ?? resolve("server/data/board.json"), playersFile: process.env.PLAYERS_FILE ?? resolve("server/data/players.json"), staticDir: process.env.STATIC_DIR }).then((s) => {
     console.log(`TrackRush relay listening on port ${s.port}`);
     console.log(`In the game, connect to ws://localhost:${s.port} (or ws://<this PC's IP>:${s.port} from another device).`);
   });
