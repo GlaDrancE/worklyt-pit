@@ -535,10 +535,12 @@ async function boot(): Promise<void> {
         pause.classList.add("hidden");
         game.start(trackId, "race", undefined, rivals);
         showTouch(true);
+        autoQueueIfReady();
       }),
   });
 
   let openMp: () => void = () => undefined;
+  let autoQueueIfReady: () => void = () => undefined;
   // First-run "how to drive" card ---------------------------------------------------
   const TUT_KEY = "trackrush.tutorialDone";
   const tutorial = byId("tutorial");
@@ -594,7 +596,18 @@ async function boot(): Promise<void> {
   function beginNow(): void {
     commitName();
     if (tab === "online") {
-      openMp();
+      modes.clearActive();
+      startWhenReady(() => {
+        menu.classList.add("hidden");
+        pause.classList.add("hidden");
+        game.start(trackSelect.value, "race", undefined, {
+          count: Number(rivalsSelect.value) || 2,
+          difficulty: difficultySelect.value as Difficulty,
+        });
+        showTouch(true);
+        autoQueueIfReady();
+        openMp();
+      });
       return;
     }
     modes.clearActive();
@@ -607,6 +620,7 @@ async function boot(): Promise<void> {
         difficulty: difficultySelect.value as Difficulty,
       });
       showTouch(true);
+      autoQueueIfReady();
     });
   }
   // Online 1v1 ---------------------------------------------------------------
@@ -647,6 +661,24 @@ async function boot(): Promise<void> {
   const client = new Multiplayer({ id: profile.id, name: profile.name });
   let resultLobbyTimer = 0;
   let autoQuickSearchStarted = false;
+  let relayDriverName = profile.name;
+  const ensureRelayConnection = (): void => {
+    const relayAddress = mpUrl.value.trim();
+    if (client.phase !== "offline" && client.phase !== "connecting") {
+      if (relayDriverName === profile.name) return;
+      client.disconnect();
+    }
+    client.updateName(profile.name);
+    relayDriverName = profile.name;
+    if (client.phase === "offline" && relayAddress) void client.connect(relayAddress);
+  };
+  autoQueueIfReady = () => {
+    ensureRelayConnection();
+    if (game.phase === "playing" && tab !== "solo" && client.phase === "online" && !autoQuickSearchStarted) {
+      autoQuickSearchStarted = true;
+      client.quick(onlineKey());
+    }
+  };
   mp = client;
   game.onSendState = (st) => client.sendState(st);
   game.onFinish = (ms) => client.sendFinish(ms);
@@ -689,10 +721,7 @@ async function boot(): Promise<void> {
       client.requestBoard(trackSelect.value);
       drawRanking();
       void backup();
-      if (game.phase === "playing" && !autoQuickSearchStarted) {
-        autoQuickSearchStarted = true;
-        client.quick(onlineKey());
-      }
+      autoQueueIfReady();
     }
     if (p === "queued") hud.toast("Waiting for another driver to join this track…", 4000);
   };
@@ -776,7 +805,7 @@ async function boot(): Promise<void> {
 
   openMp = () => {
     syncMpColour();
-    client.updateName(profile.name);
+    ensureRelayConnection();
     updateMpTrack();
     mpPanel.classList.remove("hidden");
   };
@@ -785,6 +814,7 @@ async function boot(): Promise<void> {
     if (client.connected) client.disconnect();
     else {
       client.updateName(profile.name);
+      relayDriverName = profile.name;
       saveSetting("relay", mpUrl.value.trim());
       void client.connect(mpUrl.value.trim());
     }
@@ -840,6 +870,7 @@ async function boot(): Promise<void> {
           difficulty: difficultySelect.value as Difficulty,
         });
         showTouch(true);
+        autoQueueIfReady();
         openMp();
       });
     } else begin();
@@ -853,17 +884,9 @@ async function boot(): Promise<void> {
   byId("loading").classList.add("hidden");
   commitName();
   modes.clearActive();
-  startWhenReady(() => {
-    game.start(trackSelect.value, "race", undefined, {
-      count: Number(rivalsSelect.value) || 2,
-      difficulty: difficultySelect.value as Difficulty,
-    });
-    showTouch(true);
-    client.updateName(profile.name);
-    const relayAddress = mpUrl.value.trim();
-    if (relayAddress) void client.connect(relayAddress);
-    else hud.toast("Online multiplayer needs a WebSocket relay URL. Configure VITE_RELAY_URL to enable it.", 6000);
-  });
+  menu.classList.remove("hidden");
+  const relayAddress = mpUrl.value.trim();
+  if (relayAddress) void client.connect(relayAddress);
 }
 
 window.addEventListener("error", (e) => {
