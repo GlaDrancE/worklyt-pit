@@ -1,0 +1,18 @@
+{
+  "name": "TrackRush Pro",
+  "short_name": "TrackRush",
+  "description": "An original 3D racing simulator.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "background_color": "#0b0d12",
+  "theme_color": "#0b0d12",
+  "icons": [
+    {
+      "src": "./app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

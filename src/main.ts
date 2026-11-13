@@ -11,7 +11,7 @@ import { CAR_COLOURS, colourName } from "./race/unlocks";
 import { syncPlayer } from "./net/playerSync";
 import { historyEvents } from "./race/history";
 import { cleanName, clearHistory, leaderboard, loadHistory, loadProfile, saveProfile } from "./race/history";
-import { isCompanyName, WORKLYFT } from "./race/companies";
+import { WORKLYFT } from "./race/companies";
 import { Multiplayer, type MatchInfo } from "./net/Multiplayer";
 import { Confetti } from "./ui/Confetti";
 import { renderHistory } from "./ui/HistoryView";
@@ -46,6 +46,14 @@ function webglAvailable(): boolean {
 }
 
 async function boot(): Promise<void> {
+  if (matchMedia("(pointer: coarse)").matches && document.documentElement.requestFullscreen) {
+    const requestFullscreen = (): void => {
+      if (document.fullscreenElement) return;
+      void document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => {});
+    };
+    document.addEventListener("pointerdown", requestFullscreen, { once: true });
+  }
+
   if (!webglAvailable()) {
     showError("This browser or device can't run WebGL, which the 3D game needs. Try a recent Chrome, Edge or Firefox.");
     return;
@@ -436,7 +444,7 @@ async function boot(): Promise<void> {
   showId();
   const commitName = () => {
     const entered = cleanName(nameInput.value);
-    const cleaned = isCompanyName(entered) && entered !== WORKLYFT ? entered : profile.name;
+    const cleaned = entered && entered !== WORKLYFT ? entered : profile.name;
     profile.name = cleaned;
     nameInput.value = cleaned;
     saveProfile(profile);

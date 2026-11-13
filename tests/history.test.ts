@@ -46,15 +46,16 @@ describe("driver profile", () => {
     expect(b).toEqual(a);
   });
 
-  it("migrates existing personal and Worklyft profiles to a popular company", () => {
+  it("keeps a custom driver name and migrates the reserved Worklyft name", () => {
     const store = memory();
-    for (const oldName of ["Alex Racer", WORKLYFT]) {
-      store.setItem("trackrush.profile", JSON.stringify({ id: "player-id", name: oldName }));
-      const profile = loadProfile(store, () => 0.5, 6);
-      expect(POPULAR_COMPANIES).toContain(profile.name);
-      expect(profile.name).not.toBe(WORKLYFT);
-      expect(JSON.parse(store.getItem("trackrush.profile")!).name).toBe(profile.name);
-    }
+    store.setItem("trackrush.profile", JSON.stringify({ id: "player-id", name: "Alex Racer" }));
+    expect(loadProfile(store, () => 0.5, 6).name).toBe("Alex Racer");
+
+    store.setItem("trackrush.profile", JSON.stringify({ id: "player-id", name: WORKLYFT }));
+    const profile = loadProfile(store, () => 0.5, 6);
+    expect(POPULAR_COMPANIES).toContain(profile.name);
+    expect(profile.name).not.toBe(WORKLYFT);
+    expect(JSON.parse(store.getItem("trackrush.profile")!).name).toBe(profile.name);
   });
 
   it("generates different names and cleans user input", () => {

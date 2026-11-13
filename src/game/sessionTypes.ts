@@ -51,6 +51,7 @@ export interface Session {
   groundHandle: number;
   car: VehiclePhysics;
   carView: CarView;
+  playerLabel: THREE.Sprite;
   groups: THREE.Group[];
   race: RaceManager | null;
   telemetry: TelemetryRecorder;

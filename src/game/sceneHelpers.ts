@@ -67,7 +67,30 @@ export function makeLabel(name: string): THREE.Sprite {
   const c = document.createElement("canvas");
   c.width = 512;
   c.height = 128;
+  drawLabel(c, name);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+  sprite.userData.labelCanvas = c;
+  sprite.userData.labelText = name;
+  sprite.scale.set(4.4, 1.1, 1);
+  return sprite;
+}
+
+export function setLabelText(sprite: THREE.Sprite, name: string): void {
+  if (sprite.userData.labelText === name) return;
+  const canvas = sprite.userData.labelCanvas as HTMLCanvasElement | undefined;
+  if (!canvas) throw new Error("Name label is missing its canvas.");
+  drawLabel(canvas, name);
+  const texture = sprite.material.map;
+  if (!texture) throw new Error("Name label is missing its texture.");
+  texture.needsUpdate = true;
+  sprite.userData.labelText = name;
+}
+
+function drawLabel(c: HTMLCanvasElement, name: string): void {
   const g = c.getContext("2d")!;
+  g.clearRect(0, 0, c.width, c.height);
   g.fillStyle = "rgba(11,13,18,0.75)";
   g.beginPath();
   g.roundRect(8, 24, 496, 80, 24);
@@ -77,11 +100,6 @@ export function makeLabel(name: string): THREE.Sprite {
   g.textAlign = "center";
   g.textBaseline = "middle";
   g.fillText(name, 256, 66, 470);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
-  sprite.scale.set(4.4, 1.1, 1);
-  return sprite;
 }
 export function disposeObject(root: THREE.Object3D): void {
   root.traverse((o) => {

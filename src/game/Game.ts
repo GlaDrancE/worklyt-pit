@@ -24,7 +24,7 @@ import { opponentLivery } from "../race/unlocks";
 import { PitCrewClock } from "../audio/pitCrew";
 import type { GameMode, RivalSession, Session, VersusSession } from "./sessionTypes";
 export type { GameMode } from "./sessionTypes";
-import { GHOST_LIVERY, GHOST_OPACITY, RIVAL_LIVERIES, Y_AXIS, disposeObject, fadeCar, gridPose, makeLabel, rowPose, scaleFade } from "./sceneHelpers";
+import { GHOST_LIVERY, GHOST_OPACITY, RIVAL_LIVERIES, Y_AXIS, disposeObject, fadeCar, gridPose, makeLabel, rowPose, scaleFade, setLabelText } from "./sceneHelpers";
 import { LampLights } from "./LampLights";
 import { ghostVisibility } from "./ghostFade";
 import { ReplayController } from "./ReplayController";
@@ -296,8 +296,9 @@ export class Game {
     const start = rivalCount > 0 ? rowPose(model, rivalCount) : gridPose(model, versus ? versus.slot : null);
     const car = new VehiclePhysics(world, start);
     const carView = new CarView(this.playerLivery, this.quality === "low" ? "lo" : "hi");
-    this.scene.add(carView.root);
-    groups.push(carView.root as THREE.Group);
+    const playerLabel = makeLabel(this.driver.name);
+    this.scene.add(carView.root, playerLabel);
+    groups.push(carView.root as THREE.Group, playerLabel as unknown as THREE.Group);
 
     const info = { session_id: newSessionId(), track_id: def.id, mode, started_at: new Date().toISOString() };
     const telemetry = new TelemetryRecorder(info);
@@ -311,6 +312,7 @@ export class Game {
       groundHandle: ground.handle,
       car,
       carView,
+      playerLabel,
       groups,
       race: null,
       telemetry,
@@ -669,6 +671,8 @@ export class Game {
     if (s) {
       const snap = s.car.snapshot();
       if (!s.dm.carried) s.carView.sync(snap, s.car, dt);
+      s.playerLabel.position.set(snap.x, 2.9, snap.z);
+      s.playerLabel.visible = !this.replayer.active;
       s.carView.setBraking(s.lastInput.brake > 0 && snap.forwardSpeed > 1);
       for (const racer of s.onlinePlayers.values()) this.updateGhost(racer, dt);
       if (s.rivals) this.updateRivalViews(s.rivals, dt);
@@ -1189,6 +1193,7 @@ export class Game {
       const gapAhead = ahead.length ? Math.round((ahead[0]! - mine) * s.model.length) : 0;
       const tail = ahead.length ? ` · ${gapAhead} m to P${place - 1}` : " · leading";
       this.hud.setVersus(`P${place} / ${total}${tail}`, place === 1 ? "ahead" : "");
+      setLabelText(s.playerLabel, `${this.driver.name} · P${place}/${total}`);
     }
   }
 

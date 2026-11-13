@@ -36,13 +36,13 @@ TrackRush Pro is a racing game that runs entirely in the browser on desktop and 
 | --- | --- |
 | **Driving** | Raycast-vehicle physics tuned for a single-seater: about 2.3 s to 100 km/h, around 320 km/h top speed, downforce, brake bias and grass that slows you down. Race and drift handling. |
 | **Circuits** | Four full-length circuits (2.6 to 4.2 km) and three training grounds under 2 km that drill straights, turns and corners. Day, dusk and night, dry or wet. |
-| **Racing** | 3-2-1 start, three sectors, validated laps, 1, 2 or 5 rivals at three difficulties, tyre wear and pit stops. |
+| **Racing** | Set your driver name and see it with your live position above your car; 3-2-1 start, three sectors, validated laps, 1, 2 or 5 rivals at three difficulties, tyre wear and pit stops. |
 | **Race control** | Crash damage in ten zones, yellow flags, virtual safety car, safety car with a recovery truck, and red flags. |
 | **Night lighting** | Street lamps give real light at dusk and night, and can be switched off for a harder race. |
 | **Ghost and replay** | Your best lap races you as a ghost. Rewatch it from four cameras and export a lap image coloured by speed. |
 | **Online multiplayer** | Join a live room with up to 32 drivers through a relay server you can host for free. |
 | **Progression** | Points, car colours, daily challenge, championship seasons and achievements. |
-| **Phones** | Portrait and landscape layouts, touch buttons or drag wheel, tilt steering and an easy-drive mode. |
+| **Phones** | Portrait and landscape layouts, touch buttons or drag wheel, tilt steering, easy-drive mode and fullscreen when installed or supported by the browser. |
 | **Your data** | Stored on your device by default, with an optional free Cloudflare backup. Telemetry exports to CSV or JSON. |
 
 ## Quick start
@@ -109,6 +109,7 @@ Known limits:
 - Lap times are reported by each game. The relay rejects impossible times and ties a driver ID to one device, but no browser game can be made fully cheat-proof.
 - The Docker image builds and serves the game and relay; the Render Blueprint has not been run end to end.
 - Phone sensors and screen locking vary by browser.
+- A normal browser link cannot hide the browser's address bar before the user interacts. On supported phones, the game requests fullscreen on the first tap; for fullscreen from launch, install it from the browser's **Add to Home Screen** or **Install app** option and open the installed app.
 
 ## Privacy
 

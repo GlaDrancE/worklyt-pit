@@ -1,7 +1,7 @@
 import { cleanName } from "../net/protocol";
 import { LAYOUT_EPOCH } from "../track/tracks";
 import type { LapResult } from "./RaceManager";
-import { companyForPlayer, isCompanyName, WORKLYFT } from "./companies";
+import { companyForPlayer, WORKLYFT } from "./companies";
 
 /** One race (or abandoned race) saved on this device. */
 export interface RaceRecord {
@@ -79,7 +79,7 @@ export function loadProfile(store: StorageLike | null = browserStorage(), rand: 
       const p = JSON.parse(raw) as Partial<DriverProfile>;
       if (typeof p.id === "string" && typeof p.name === "string" && cleanName(p.name)) {
         const savedName = cleanName(p.name);
-        const name = isCompanyName(savedName) && savedName !== WORKLYFT ? savedName : companyForPlayer(p.id, fieldSize);
+        const name = savedName !== WORKLYFT ? savedName : companyForPlayer(p.id, fieldSize);
         const profile = { id: p.id, name };
         if (name !== p.name) saveProfile(profile, store);
         return profile;
